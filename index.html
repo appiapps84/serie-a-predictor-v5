@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8">
@@ -98,17 +98,19 @@
       <div class="card">
         <div class="card-title" id="match-card-title">Selezione Match Serie A</div>
         
-        <div id="coppa-fixtures-container" style="display:none;">
-          <label for="coppa-fixture">Sfida Sedicesimi / Turno</label>
-          <select id="coppa-fixture" onchange="loadCoppaFixture()">
-            <option value="Cagliari-Cremonese">Cagliari vs Cremonese</option>
-            <option value="Torino-Empoli">Torino vs Empoli</option>
-            <option value="Monza-Brescia">Monza vs Brescia</option>
-            <option value="Pisa-Cesena">Pisa vs Cesena</option>
-            <option value="Lecce-Sassuolo">Lecce vs Sassuolo</option>
-            <option value="Genoa-Sampdoria">Genoa vs Sampdoria</option>
-          </select>
-        </div>
+<div id="coppa-fixtures-container" style="display:none;">
+  <label for="coppa-fixture">Sfida Sedicesimi Coppa Italia</label>
+  <select id="coppa-fixture" onchange="loadCoppaFixture()">
+    <option value="Genoa-Sudtirol">Genoa vs Südtirol</option>
+    <option value="Fiorentina-Pisa">Fiorentina vs Pisa</option>
+    <option value="Parma-Cremonese">Parma vs Cremonese</option>
+    <option value="Torino-Monza">Torino vs Monza</option>
+    <option value="Sassuolo-Frosinone">Sassuolo vs Frosinone</option>
+    <option value="Udinese-Venezia">Udinese vs Venezia</option>
+    <option value="Palermo-Mantova">Palermo vs Mantova</option>
+    <option value="Cagliari-Verona">Cagliari vs Hellas Verona</option>
+  </select>
+</div>
 
         <label for="home-team">Squadra Casa</label>
         <select id="home-team" onchange="calculatePrediction()">
@@ -324,6 +326,15 @@
     'Monza': { att: 0.80, def: 1.05, xgFor: 0.9, xgAg: 1.5, xpts: 7.9 },
     'Sassuolo': { att: 0.85, def: 1.10, xgFor: 1.0, xgAg: 1.5, xpts: 7.5 },
     'Cremonese': { att: 0.70, def: 1.05, xgFor: 0.8, xgAg: 1.4, xpts: 6.8 }
+    'Sudtirol': { att: 0.70, def: 1.05, xgFor: 0.8, xgAg: 1.4, xpts: 0 },
+    'Pisa': { att: 0.75, def: 1.00, xgFor: 0.9, xgAg: 1.3, xpts: 0 },
+    'Frosinone': { att: 0.75, def: 1.10, xgFor: 0.9, xgAg: 1.5, xpts: 0 },
+    'Venezia': { att: 0.80, def: 1.05, xgFor: 1.0, xgAg: 1.4, xpts: 0 },
+    'Mantova': { att: 0.65, def: 1.15, xgFor: 0.7, xgAg: 1.6, xpts: 0 },
+    'Palermo': { att: 0.80, def: 1.00, xgFor: 1.0, xgAg: 1.3, xpts: 0 },
+    'Verona': { att: 0.80, def: 1.05, xgFor: 0.9, xgAg: 1.4, xpts: 0 },
+    'Parma': { att: 0.85, def: 1.00, xgFor: 1.1, xgAg: 1.3, xpts: 0 },
+    'Udinese': { att: 0.90, def: 0.90, xgFor: 1.2, xgAg: 1.2, xpts: 0 }
   };
 
   function poisson(k, lambda) {
