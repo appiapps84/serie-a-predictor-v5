@@ -8,7 +8,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // Endpoints principali per le partite di Big Balls Data
   const endpoints = [
     'https://api.bigballsdata.com/v1/fixtures?league=serie-a',
     'https://api.bigballsdata.com/v1/serie-a/fixtures',
@@ -43,22 +42,34 @@ export default async function handler(req, res) {
     return res.status(lastStatus).json({ 
       error: 'BBD_ENDPOINT_NOT_FOUND',
       status: lastStatus,
-      message: 'Impossibile trovare l\'endpoint corretto su Big Balls Data. Verificare l\'URL di base nella documentazione BBD.'
+      message: 'Impossibile trovare l\'endpoint corretto su Big Balls Data.'
     });
   }
 
   const rawData = Array.isArray(responseData) ? responseData : (responseData.data || []);
 
-  const processedFixtures = rawData.map(fixture => ({
-    id: fixture.id || fixture.match_id,
-    homeTeam: fixture.home_team || fixture.homeTeam,
-    awayTeam: fixture.away_team || fixture.awayTeam,
-    matchday: fixture.matchday || fixture.round || 8,
-    homeStartersPct: Math.max(50, 100 - ((fixture.home_absentees_count || 0) * 7)),
-    awayStartersPct: Math.max(50, 100 - ((fixture.away_absentees_count || 0) * 7)),
-    homeRestDays: fixture.home_rest_days || 7,
-    awayRestDays: fixture.away_rest_days || 7
-  }));
+  // MAPPING DELLE PARTITE CON FORMAZIONI ED ASSENTI
+  const processedFixtures = rawData.map(fixture => {
+    const homeAbsCount = fixture.home_absentees_count || (fixture.home_absentees ? fixture.home_absentees.length : 0);
+    const awayAbsCount = fixture.away_absentees_count || (fixture.away_absentees ? fixture.away_absentees.length : 0);
+
+    return {
+      id: fixture.id || fixture.match_id,
+      homeTeam: fixture.home_team || fixture.homeTeam,
+      awayTeam: fixture.away_team || fixture.awayTeam,
+      matchday: fixture.matchday || fixture.round || 8,
+      homeStartersPct: Math.max(50, 100 - (homeAbsCount * 7)),
+      awayStartersPct: Math.max(50, 100 - (awayAbsCount * 7)),
+      homeRestDays: fixture.home_rest_days || 7,
+      awayRestDays: fixture.away_rest_days || 7,
+
+      // NUOVI CAMPI FORMAZIONI ED ASSENTI
+      homeLineup: fixture.home_lineup || fixture.home_probable_lineup || [],
+      awayLineup: fixture.away_lineup || fixture.away_probable_lineup || [],
+      homeAbsentees: fixture.home_absentees || fixture.home_absentees_list || [],
+      awayAbsentees: fixture.away_absentees || fixture.away_absentees_list || []
+    };
+  });
 
   return res.status(200).json({
     last_updated: new Date().toISOString(),
