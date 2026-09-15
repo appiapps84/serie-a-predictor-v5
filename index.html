@@ -69,6 +69,7 @@
     .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; flex-wrap: wrap; }
     .tab { padding: 8px 16px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; font-size: 0.88rem; }
     .tab.active { border-bottom-color: var(--accent-blue); color: var(--accent-blue); }
+    .auto-tag { font-size: 0.7rem; color: var(--accent-green); border: 1px solid var(--accent-green); padding: 1px 5px; border-radius: 3px; margin-left: 6px; }
   </style>
 </head>
 <body>
@@ -79,7 +80,6 @@
       ⚽ Quant Predictor <span class="badge">V5 Pro</span>
     </div>
 
-    <!-- SELETTORE COMPETIZIONE -->
     <div class="comp-selector">
       <button class="comp-btn active" id="btn-seriea" onclick="setCompetition('seriea')">🇮🇹 Serie A</button>
       <button class="comp-btn" id="btn-coppa" onclick="setCompetition('coppa')">🏆 Coppa Italia</button>
@@ -113,75 +113,24 @@
         </div>
 
         <label for="home-team">Squadra Casa</label>
-        <select id="home-team" onchange="calculatePrediction()">
-          <option value="Inter">Inter</option>
-          <option value="Juventus">Juventus</option>
-          <option value="Milan">Milan</option>
-          <option value="Atalanta">Atalanta</option>
-          <option value="Roma" selected>Roma</option>
-          <option value="Napoli">Napoli</option>
-          <option value="Lazio">Lazio</option>
-          <option value="Fiorentina">Fiorentina</option>
-          <option value="Bologna">Bologna</option>
-          <option value="Torino">Torino</option>
-          <option value="Cagliari">Cagliari</option>
-          <option value="Empoli">Empoli</option>
-          <option value="Monza">Monza</option>
-          <option value="Lecce">Lecce</option>
-          <option value="Genoa">Genoa</option>
-          <option value="Sassuolo">Sassuolo</option>
-          <option value="Cremonese">Cremonese</option>
-          <option value="Sudtirol">Südtirol</option>
-          <option value="Pisa">Pisa</option>
-          <option value="Frosinone">Frosinone</option>
-          <option value="Venezia">Venezia</option>
-          <option value="Mantova">Mantova</option>
-          <option value="Palermo">Palermo</option>
-          <option value="Verona">Hellas Verona</option>
-          <option value="Parma">Parma</option>
-          <option value="Udinese">Udinese</option>
-        </select>
+        <select id="home-team" onchange="onTeamSelect()"></select>
 
         <label for="away-team">Squadra Trasferta</label>
-        <select id="away-team" onchange="calculatePrediction()">
-          <option value="Inter">Inter</option>
-          <option value="Juventus" selected>Juventus</option>
-          <option value="Milan">Milan</option>
-          <option value="Atalanta">Atalanta</option>
-          <option value="Roma">Roma</option>
-          <option value="Napoli">Napoli</option>
-          <option value="Lazio">Lazio</option>
-          <option value="Fiorentina">Fiorentina</option>
-          <option value="Bologna">Bologna</option>
-          <option value="Torino">Torino</option>
-          <option value="Cagliari">Cagliari</option>
-          <option value="Empoli">Empoli</option>
-          <option value="Monza">Monza</option>
-          <option value="Lecce">Lecce</option>
-          <option value="Genoa">Genoa</option>
-          <option value="Sassuolo">Sassuolo</option>
-          <option value="Cremonese">Cremonese</option>
-          <option value="Sudtirol">Südtirol</option>
-          <option value="Pisa">Pisa</option>
-          <option value="Frosinone">Frosinone</option>
-          <option value="Venezia">Venezia</option>
-          <option value="Mantova">Mantova</option>
-          <option value="Palermo">Palermo</option>
-          <option value="Verona">Hellas Verona</option>
-          <option value="Parma">Parma</option>
-          <option value="Udinese">Udinese</option>
-        </select>
+        <select id="away-team" onchange="onTeamSelect()"></select>
 
         <label for="matchday" id="matchday-label">Giornata di Campionato</label>
         <input type="number" id="matchday" min="1" max="38" value="8" onchange="calculatePrediction()">
       </div>
 
       <div class="card">
-        <div class="card-title">Modificatori Contestuali</div>
+        <div class="card-title">
+          Modificatori Formazione
+          <span class="auto-tag">AUTO-SYNC LIVE</span>
+        </div>
         
         <div class="slider-group">
           <div class="slider-header">
-            <span>Titolari Casa (Turnover)</span>
+            <span>Titolari Casa (Disponibilità)</span>
             <span id="home-starters-val">100%</span>
           </div>
           <input type="range" id="home-starters" min="50" max="100" value="100" oninput="updateSliders(); calculatePrediction();">
@@ -189,7 +138,7 @@
 
         <div class="slider-group">
           <div class="slider-header">
-            <span>Titolari Trasferta (Turnover)</span>
+            <span>Titolari Trasferta (Disponibilità)</span>
             <span id="away-starters-val">100%</span>
           </div>
           <input type="range" id="away-starters" min="50" max="100" value="100" oninput="updateSliders(); calculatePrediction();">
@@ -234,8 +183,8 @@
             <div class="lbl">xG Totali Gara</div>
             <div class="val" id="xg-total">2.67</div>
           </div>
-          <div class="stat-box">
-            <div class="lbl">Qualificazione / Passaggio</div>
+          <div class="stat-box" id="qualify-box" style="display:none;">
+            <div class="lbl">Passaggio Turno</div>
             <div class="val" id="qualify-val">Casa 68%</div>
           </div>
         </div>
@@ -262,13 +211,13 @@
       <!-- TABS -->
       <div class="card">
         <div class="tabs">
-          <div class="tab active" onclick="switchTab('tab-markets', event)">Mercati V5</div>
+          <div class="tab active" onclick="switchTab('tab-markets', event)">Tutti i Mercati</div>
           <div class="tab" onclick="switchTab('tab-scores', event)">Risultati Esatti</div>
           <div class="tab" onclick="switchTab('tab-backtest', event)">📈 Backtesting & ML</div>
           <div class="tab" id="tab-xpts-btn" onclick="switchTab('tab-xpts', event)">Classifica xPTS</div>
         </div>
 
-        <!-- TAB 1: MERCATI -->
+        <!-- TAB 1: TUTTI I MERCATI -->
         <div id="tab-markets">
           <table>
             <thead>
@@ -327,6 +276,18 @@
 
 <script>
   let currentComp = 'seriea';
+  let syncedFixtures = {};
+
+  // 20 Squadre UFFICIALI Serie A 2026/2027
+  const serieATeams = [
+    'Atalanta', 'Bologna', 'Cagliari', 'Como', 'Empoli', 
+    'Fiorentina', 'Genoa', 'Inter', 'Juventus', 'Lazio', 
+    'Lecce', 'Milan', 'Monza', 'Napoli', 'Parma', 
+    'Roma', 'Torino', 'Udinese', 'Venezia', 'Verona'
+  ];
+
+  // Squadre Aggiuntive Coppa Italia
+  const coppaExtraTeams = ['Cremonese', 'Sudtirol', 'Pisa', 'Frosinone', 'Mantova', 'Palermo', 'Sassuolo'];
 
   const teamsData = {
     'Inter': { att: 1.35, def: 0.70, xgFor: 2.1, xgAg: 0.9, xpts: 18.2 },
@@ -344,18 +305,35 @@
     'Monza': { att: 0.80, def: 1.05, xgFor: 0.9, xgAg: 1.5, xpts: 7.9 },
     'Lecce': { att: 0.75, def: 1.10, xgFor: 0.8, xgAg: 1.5, xpts: 7.2 },
     'Genoa': { att: 0.85, def: 1.00, xgFor: 1.0, xgAg: 1.3, xpts: 8.8 },
-    'Sassuolo': { att: 0.85, def: 1.10, xgFor: 1.0, xgAg: 1.5, xpts: 7.5 },
-    'Cremonese': { att: 0.75, def: 1.05, xgFor: 0.8, xgAg: 1.4, xpts: 6.8 },
+    'Como': { att: 0.85, def: 1.05, xgFor: 1.0, xgAg: 1.4, xpts: 8.0 },
+    'Parma': { att: 0.85, def: 1.00, xgFor: 1.1, xgAg: 1.3, xpts: 8.2 },
+    'Udinese': { att: 0.90, def: 0.90, xgFor: 1.2, xgAg: 1.2, xpts: 9.1 },
+    'Venezia': { att: 0.80, def: 1.05, xgFor: 1.0, xgAg: 1.4, xpts: 7.0 },
+    'Verona': { att: 0.80, def: 1.05, xgFor: 0.9, xgAg: 1.4, xpts: 7.4 },
+    'Sassuolo': { att: 0.85, def: 1.10, xgFor: 1.0, xgAg: 1.5, xpts: 0 },
+    'Cremonese': { att: 0.75, def: 1.05, xgFor: 0.8, xgAg: 1.4, xpts: 0 },
     'Sudtirol': { att: 0.70, def: 1.10, xgFor: 0.8, xgAg: 1.4, xpts: 0 },
     'Pisa': { att: 0.75, def: 1.05, xgFor: 0.9, xgAg: 1.3, xpts: 0 },
     'Frosinone': { att: 0.75, def: 1.15, xgFor: 0.9, xgAg: 1.5, xpts: 0 },
-    'Venezia': { att: 0.80, def: 1.05, xgFor: 1.0, xgAg: 1.4, xpts: 0 },
     'Mantova': { att: 0.65, def: 1.20, xgFor: 0.7, xgAg: 1.6, xpts: 0 },
-    'Palermo': { att: 0.85, def: 1.05, xgFor: 1.0, xgAg: 1.3, xpts: 0 },
-    'Verona': { att: 0.80, def: 1.05, xgFor: 0.9, xgAg: 1.4, xpts: 0 },
-    'Parma': { att: 0.85, def: 1.00, xgFor: 1.1, xgAg: 1.3, xpts: 0 },
-    'Udinese': { att: 0.90, def: 0.90, xgFor: 1.2, xgAg: 1.2, xpts: 0 }
+    'Palermo': { att: 0.85, def: 1.05, xgFor: 1.0, xgAg: 1.3, xpts: 0 }
   };
+
+  function populateTeamDropdowns(list) {
+    const homeSel = document.getElementById('home-team');
+    const awaySel = document.getElementById('away-team');
+    
+    homeSel.innerHTML = '';
+    awaySel.innerHTML = '';
+
+    list.forEach(team => {
+      homeSel.add(new Option(team, team));
+      awaySel.add(new Option(team, team));
+    });
+
+    homeSel.value = list[0];
+    awaySel.value = list[1] || list[0];
+  }
 
   function poisson(k, lambda) {
     let factorial = 1;
@@ -374,6 +352,10 @@
       document.getElementById('matchday-label').style.display = 'none';
       document.getElementById('matchday').style.display = 'none';
       document.getElementById('tab-xpts-btn').style.display = 'none';
+      document.getElementById('qualify-box').style.display = 'block';
+
+      const fullList = [...serieATeams, ...coppaExtraTeams].sort();
+      populateTeamDropdowns(fullList);
       loadCoppaFixture();
     } else {
       document.getElementById('match-card-title').innerText = 'Selezione Match Serie A';
@@ -381,7 +363,12 @@
       document.getElementById('matchday-label').style.display = 'block';
       document.getElementById('matchday').style.display = 'block';
       document.getElementById('tab-xpts-btn').style.display = 'block';
-      calculatePrediction();
+      document.getElementById('qualify-box').style.display = 'none';
+
+      populateTeamDropdowns(serieATeams.sort());
+      document.getElementById('home-team').value = 'Roma';
+      document.getElementById('away-team').value = 'Juventus';
+      onTeamSelect();
     }
   }
 
@@ -389,6 +376,28 @@
     const val = document.getElementById('coppa-fixture').value.split('-');
     document.getElementById('home-team').value = val[0];
     document.getElementById('away-team').value = val[1];
+    onTeamSelect();
+  }
+
+  function onTeamSelect() {
+    const home = document.getElementById('home-team').value;
+    const away = document.getElementById('away-team').value;
+    const key = `${home}_${away}`;
+
+    if (syncedFixtures[key]) {
+      const data = syncedFixtures[key];
+      document.getElementById('home-starters').value = data.homeStartersPct;
+      document.getElementById('away-starters').value = data.awayStartersPct;
+      document.getElementById('home-rest').value = data.homeRestDays;
+      document.getElementById('away-rest').value = data.awayRestDays;
+    } else {
+      document.getElementById('home-starters').value = 100;
+      document.getElementById('away-starters').value = 100;
+      document.getElementById('home-rest').value = 7;
+      document.getElementById('away-rest').value = 7;
+    }
+
+    updateSliders();
     calculatePrediction();
   }
 
@@ -402,6 +411,8 @@
   function calculatePrediction() {
     const homeName = document.getElementById('home-team').value;
     const awayName = document.getElementById('away-team').value;
+
+    if (!homeName || !awayName || homeName === awayName) return;
 
     const home = teamsData[homeName] || { att: 0.9, def: 1.0 };
     const away = teamsData[awayName] || { att: 0.9, def: 1.0 };
@@ -419,7 +430,8 @@
     document.getElementById('xg-total').innerText = (xgHome + xgAway).toFixed(2);
 
     let pWinHome = 0, pDraw = 0, pWinAway = 0;
-    let pO25 = 0, pBTTS = 0;
+    let pO15 = 0, pO25 = 0, pO35 = 0, pBTTS = 0;
+    let pCombo1_O25 = 0, pComboX_O25 = 0, pCombo2_O25 = 0;
     let scores = [];
 
     for (let h = 0; h <= 6; h++) {
@@ -427,12 +439,19 @@
         let prob = poisson(h, xgHome) * poisson(a, xgAway);
         if (h === 0 && a === 0) prob *= 1.10;
 
+        const totGoals = h + a;
         if (h > a) pWinHome += prob;
         else if (h === a) pDraw += prob;
         else pWinAway += prob;
 
-        if (h + a > 2.5) pO25 += prob;
+        if (totGoals > 1.5) pO15 += prob;
+        if (totGoals > 2.5) pO25 += prob;
+        if (totGoals > 3.5) pO35 += prob;
         if (h > 0 && a > 0) pBTTS += prob;
+
+        if (h > a && totGoals > 2.5) pCombo1_O25 += prob;
+        if (h === a && totGoals > 2.5) pComboX_O25 += prob;
+        if (h < a && totGoals > 2.5) pCombo2_O25 += prob;
 
         scores.push({ score: `${h}-${a}`, prob: prob });
       }
@@ -451,14 +470,32 @@
     document.getElementById('prob-2').innerText = (pWinAway * 100).toFixed(0) + '%';
     document.getElementById('bar-2').style.width = (pWinAway * 100).toFixed(0) + '%';
 
+    // TABELLA COMPLETA MERCATI SCOMMESSE
     const marketsTbody = document.getElementById('markets-tbody');
-    marketsTbody.innerHTML = `
-      <tr><td><b>Passaggio Turno / Qualificazione</b></td><td>${(pQualHome * 100).toFixed(1)}%</td><td>${(1/pQualHome).toFixed(2)}</td></tr>
-      <tr><td><b>Over 2.5 Gol (90')</b></td><td>${(pO25 * 100).toFixed(1)}%</td><td>${(1/pO25).toFixed(2)}</td></tr>
-      <tr><td><b>Goal (90')</b></td><td>${(pBTTS * 100).toFixed(1)}%</td><td>${(1/pBTTS).toFixed(2)}</td></tr>
+    let marketsHTML = `
+      <tr><td><b>Over 1.5 Gol</b></td><td>${(pO15 * 100).toFixed(1)}%</td><td>${(1/pO15).toFixed(2)}</td></tr>
+      <tr><td><b>Under 1.5 Gol</b></td><td>${((1-pO15) * 100).toFixed(1)}%</td><td>${(1/(1-pO15)).toFixed(2)}</td></tr>
+      <tr><td><b>Over 2.5 Gol</b></td><td>${(pO25 * 100).toFixed(1)}%</td><td>${(1/pO25).toFixed(2)}</td></tr>
+      <tr><td><b>Under 2.5 Gol</b></td><td>${((1-pO25) * 100).toFixed(1)}%</td><td>${(1/(1-pO25)).toFixed(2)}</td></tr>
+      <tr><td><b>Over 3.5 Gol</b></td><td>${(pO35 * 100).toFixed(1)}%</td><td>${(1/pO35).toFixed(2)}</td></tr>
+      <tr><td><b>Under 3.5 Gol</b></td><td>${((1-pO35) * 100).toFixed(1)}%</td><td>${(1/(1-pO35)).toFixed(2)}</td></tr>
+      <tr><td><b>Goal (Entrambe segnano)</b></td><td>${(pBTTS * 100).toFixed(1)}%</td><td>${(1/pBTTS).toFixed(2)}</td></tr>
+      <tr><td><b>No Goal</b></td><td>${((1-pBTTS) * 100).toFixed(1)}%</td><td>${(1/(1-pBTTS)).toFixed(2)}</td></tr>
       <tr><td><b>Doppia Chance 1X</b></td><td>${((pWinHome + pDraw) * 100).toFixed(1)}%</td><td>${(1/(pWinHome + pDraw)).toFixed(2)}</td></tr>
-      <tr><td><b>Supplementari / Rigori (Sì)</b></td><td>${(pDraw * 100).toFixed(1)}%</td><td>${(1/pDraw).toFixed(2)}</td></tr>
+      <tr><td><b>Doppia Chance X2</b></td><td>${((pWinAway + pDraw) * 100).toFixed(1)}%</td><td>${(1/(pWinAway + pDraw)).toFixed(2)}</td></tr>
+      <tr><td><b>Doppia Chance 12</b></td><td>${((pWinHome + pWinAway) * 100).toFixed(1)}%</td><td>${(1/(pWinHome + pWinAway)).toFixed(2)}</td></tr>
+      <tr><td><b>Combo 1 + Over 2.5</b></td><td>${(pCombo1_O25 * 100).toFixed(1)}%</td><td>${(1/pCombo1_O25).toFixed(2)}</td></tr>
+      <tr><td><b>Combo 2 + Over 2.5</b></td><td>${(pCombo2_O25 * 100).toFixed(1)}%</td><td>${(1/pCombo2_O25).toFixed(2)}</td></tr>
     `;
+
+    if (currentComp === 'coppa') {
+      marketsHTML += `
+        <tr style="background:rgba(0, 210, 255, 0.08);"><td><b>Passaggio Turno / Qualificazione Casa</b></td><td>${(pQualHome * 100).toFixed(1)}%</td><td>${(1/pQualHome).toFixed(2)}</td></tr>
+        <tr style="background:rgba(0, 210, 255, 0.08);"><td><b>Supplementari / Rigori (Sì)</b></td><td>${(pDraw * 100).toFixed(1)}%</td><td>${(1/pDraw).toFixed(2)}</td></tr>
+      `;
+    }
+
+    marketsTbody.innerHTML = marketsHTML;
 
     scores.sort((a, b) => b.prob - a.prob);
     const scoresTbody = document.getElementById('scores-tbody');
@@ -519,14 +556,21 @@
     try {
       const res = await fetch('/api/sync');
       const data = await res.json();
-      if (res.ok) document.getElementById('sync-text').innerText = `Aggiornato (${data.fixtures_count} gare BBD)`;
-      else document.getElementById('sync-text').innerText = 'Verificare API Key Vercel';
+      if (res.ok && data.fixtures) {
+        data.fixtures.forEach(f => {
+          syncedFixtures[`${f.homeTeam}_${f.awayTeam}`] = f;
+        });
+        document.getElementById('sync-text').innerText = `Aggiornato (${data.fixtures_count} gare BBD)`;
+        onTeamSelect();
+      } else {
+        document.getElementById('sync-text').innerText = 'Verificare API Key Vercel';
+      }
     } catch (e) {
       document.getElementById('sync-text').innerText = 'Offline (Snapshot Locale)';
     }
   }
 
-  calculatePrediction();
+  setCompetition('seriea');
 </script>
 
 </body>
