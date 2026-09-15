@@ -217,6 +217,40 @@
           <div class="tab" id="tab-xpts-btn" onclick="switchTab('tab-xpts', event)">Classifica xPTS</div>
         </div>
 
+<!-- BOX FORMAZIONI E INFLUENZA ASSENTI -->
+<div class="card" id="lineups-card">
+  <div class="card-title">
+    📋 Formazioni Previste & Assenze
+    <span class="badge" style="background:var(--accent-gold); color:#000;">Live BBD</span>
+  </div>
+
+  <div class="grid-2">
+    <!-- CASA -->
+    <div>
+      <h4 id="lineup-home-title" style="color:var(--accent-blue); margin-bottom:8px;">Casa</h4>
+      <div style="font-size:0.85rem; background:var(--bg-input); padding:12px; border-radius:8px; border:1px solid var(--border-color);">
+        <p style="margin-bottom:4px;"><strong style="color:var(--text-main);">11 Probabile:</strong></p>
+        <ul id="home-lineup-list" style="margin-left:18px; color:var(--text-muted); margin-bottom:12px;"></ul>
+        <p style="margin-bottom:4px;"><strong style="color:var(--accent-red);">Infortunati / Squalificati:</strong></p>
+        <ul id="home-absentees-list" style="margin-left:18px; color:var(--text-muted);"></ul>
+      </div>
+    </div>
+
+    <!-- TRASFERTA -->
+    <div>
+      <h4 id="lineup-away-title" style="color:var(--accent-red); margin-bottom:8px;">Trasferta</h4>
+      <div style="font-size:0.85rem; background:var(--bg-input); padding:12px; border-radius:8px; border:1px solid var(--border-color);">
+        <p style="margin-bottom:4px;"><strong style="color:var(--text-main);">11 Probabile:</strong></p>
+        <ul id="away-lineup-list" style="margin-left:18px; color:var(--text-muted); margin-bottom:12px;"></ul>
+        <p style="margin-bottom:4px;"><strong style="color:var(--accent-red);">Infortunati / Squalificati:</strong></p>
+        <ul id="away-absentees-list" style="margin-left:18px; color:var(--text-muted);"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+        
         <!-- TAB 1: TUTTI I MERCATI -->
         <div id="tab-markets">
           <table>
@@ -383,6 +417,62 @@
     const home = document.getElementById('home-team').value;
     const away = document.getElementById('away-team').value;
     const key = `${home}_${away}`;
+
+    // 1. Auto-popola gli slider se il match ha dati sincronizzati
+    if (syncedFixtures[key]) {
+      const data = syncedFixtures[key];
+      document.getElementById('home-starters').value = data.homeStartersPct;
+      document.getElementById('away-starters').value = data.awayStartersPct;
+      document.getElementById('home-rest').value = data.homeRestDays;
+      document.getElementById('away-rest').value = data.awayRestDays;
+    } else {
+      document.getElementById('home-starters').value = 100;
+      document.getElementById('away-starters').value = 100;
+      document.getElementById('home-rest').value = 7;
+      document.getElementById('away-rest').value = 7;
+    }
+
+    // 2. Aggiorna la vista delle Formazioni Probabili e degli Assenti
+    renderLineups(home, away, key);
+
+    updateSliders();
+    calculatePrediction();
+  }
+
+  // Funzione per disegnare visivamente gli 11 titolari e gli assenti
+  function renderLineups(home, away, matchKey) {
+    const homeTitle = document.getElementById('lineup-home-title');
+    const awayTitle = document.getElementById('lineup-away-title');
+    
+    if (!homeTitle || !awayTitle) return; // Se il box HTML non è presente, salta
+
+    homeTitle.innerText = home;
+    awayTitle.innerText = away;
+
+    const data = syncedFixtures[matchKey];
+
+    const homeList = document.getElementById('home-lineup-list');
+    const awayList = document.getElementById('away-lineup-list');
+    const homeAbsList = document.getElementById('home-absentees-list');
+    const awayAbsList = document.getElementById('away-absentees-list');
+
+    if (data && data.homeLineup && data.homeLineup.length) {
+      homeList.innerHTML = data.homeLineup.map(p => `<li>${p}</li>`).join('');
+      awayList.innerHTML = data.awayLineup.map(p => `<li>${p}</li>`).join('');
+      homeAbsList.innerHTML = (data.homeAbsentees && data.homeAbsentees.length) 
+        ? data.homeAbsentees.map(p => `<li>${p}</li>`).join('') 
+        : '<li>Nessun assente principale</li>';
+      awayAbsList.innerHTML = (data.awayAbsentees && data.awayAbsentees.length) 
+        ? data.awayAbsentees.map(p => `<li>${p}</li>`).join('') 
+        : '<li>Nessun assente principale</li>';
+    } else {
+      // Fallback standard in attesa delle formazioni ufficiali
+      homeList.innerHTML = '<li>XI Titolare Tipo (In attesa di comunicazione)</li>';
+      awayList.innerHTML = '<li>XI Titolare Tipo (In attesa di comunicazione)</li>';
+      homeAbsList.innerHTML = '<li>Nessun infortunato grave</li>';
+      awayAbsList.innerHTML = '<li>Nessun infortunato grave</li>';
+    }
+  }
 
     if (syncedFixtures[key]) {
       const data = syncedFixtures[key];
