@@ -1,514 +1,431 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Serie A & Coppa Italia Predictor V5 Pro</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulatore Partite - Serie A & Coppa Italia</title>
   <style>
     :root {
-      --bg-primary: #0a0e17;
-      --bg-card: #131b2e;
-      --bg-input: #1c273e;
-      --accent-blue: #00d2ff;
-      --accent-green: #00e676;
-      --accent-red: #ff5252;
-      --accent-gold: #ffb300;
-      --text-main: #f0f4f8;
-      --text-muted: #8a99ad;
-      --border-color: #23314d;
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, sans-serif; }
-    body { background-color: var(--bg-primary); color: var(--text-main); line-height: 1.5; padding: 20px; }
-    .container { max-width: 1280px; margin: 0 auto; }
-    
-    header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-    .logo { font-size: 1.5rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 10px; }
-    .badge { background: linear-gradient(135deg, #00d2ff, #0066ff); color: #000; font-weight: bold; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; text-transform: uppercase; }
-    
-    .comp-selector { display: flex; background: var(--bg-card); padding: 4px; border-radius: 10px; border: 1px solid var(--border-color); gap: 4px; }
-    .comp-btn { padding: 8px 16px; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); font-weight: 700; cursor: pointer; transition: 0.2s; }
-    .comp-btn.active { background: var(--accent-blue); color: #000; }
 
-    .sync-status { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--text-muted); background: var(--bg-card); padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
-    
-    .grid-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
-    @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
-    
-    .card { background: var(--bg-card); border-radius: 12px; padding: 20px; border: 1px solid var(--border-color); margin-bottom: 20px; }
-    .card-title { font-size: 1.1rem; font-weight: 700; color: var(--accent-blue); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
-    
-    label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px; }
-    select, input, button { width: 100%; padding: 10px 14px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); font-size: 0.95rem; margin-bottom: 14px; outline: none; }
-    
-    .prob-bars { display: flex; flex-direction: column; gap: 12px; margin: 20px 0; }
-    .prob-row { display: grid; grid-template-columns: 70px 1fr 60px; align-items: center; gap: 12px; }
-    .prob-label { font-weight: 700; font-size: 0.88rem; }
-    .bar-bg { background: var(--bg-input); height: 16px; border-radius: 8px; overflow: hidden; }
-    .bar-fill { height: 100%; border-radius: 8px; transition: width 0.5s ease-out; }
-    .bar-1 { background: linear-gradient(90deg, #00d2ff, #0066ff); }
-    .bar-X { background: linear-gradient(90deg, #8a99ad, #c0c0c0); }
-    .bar-2 { background: linear-gradient(90deg, #ff5252, #ff7b00); }
-    .prob-val { font-weight: 700; text-align: right; font-size: 0.9rem; }
-    
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-top: 16px; }
-    .stat-box { background: var(--bg-input); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05); }
-    .stat-box .val { font-size: 1.2rem; font-weight: 800; color: #fff; margin-top: 4px; }
-    .stat-box .lbl { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; }
-    
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.88rem; }
-    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
-    th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
-    
-    .slider-group { margin-bottom: 16px; }
-    .slider-header { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px; }
-    input[type="range"] { width: 100%; height: 6px; border-radius: 3px; background: var(--bg-input); appearance: none; }
-    input[type="range"]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent-blue); cursor: pointer; }
-    
-    .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; flex-wrap: wrap; }
-    .tab { padding: 8px 16px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; font-size: 0.88rem; }
-    .tab.active { border-bottom-color: var(--accent-blue); color: var(--accent-blue); }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 700px;
+      width: 100%;
+    }
+
+    h1 {
+      text-align: center;
+      color: var(--accent);
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    select, input, button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background-color: #0f172a;
+      color: var(--text);
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    button {
+      background-color: var(--accent);
+      color: #0f172a;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.2s;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .results {
+      display: none;
+    }
+
+    .prob-bar-container {
+      margin-bottom: 12px;
+    }
+
+    .prob-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-size: 0.9rem;
+    }
+
+    .prob-bar-bg {
+      background-color: var(--border);
+      height: 12px;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .prob-bar-fill {
+      height: 100%;
+      background-color: var(--accent);
+      width: 0%;
+      transition: width 0.5s ease-out;
+    }
+
+    .scores-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .score-item {
+      background: #0f172a;
+      padding: 8px;
+      border-radius: 6px;
+      text-align: center;
+      border: 1px solid var(--border);
+    }
+
+    .score-item .match {
+      font-weight: bold;
+      color: var(--accent);
+    }
+
+    .score-item .perc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <header>
-    <div class="logo">
-      ⚽ Quant Predictor <span class="badge">V5 Pro</span>
+  <h1>Simulatore Partite</h1>
+
+  <!-- SELEZIONE MODALITÀ -->
+  <div class="card">
+    <div class="form-group">
+      <label for="competition">Competizione</label>
+      <select id="competition" onchange="toggleMode()">
+        <option value="seriea">Serie A (Personalizzata)</option>
+        <option value="coppa">Sedicesimi Coppa Italia</option>
+      </select>
     </div>
 
-    <!-- SELETTORE COMPETIZIONE -->
-    <div class="comp-selector">
-      <button class="comp-btn active" id="btn-seriea" onclick="setCompetition('seriea')">🇮🇹 Serie A</button>
-      <button class="comp-btn" id="btn-coppa" onclick="setCompetition('coppa')">🏆 Coppa Italia</button>
+    <!-- SELEZIONE COPPA ITALIA -->
+    <div id="coppa-container" class="form-group" style="display: none;">
+      <label for="coppa-fixture">Sfida Sedicesimi Coppa Italia</label>
+      <select id="coppa-fixture" onchange="loadCoppaFixture()">
+        <option value="Genoa-Sudtirol">Genoa vs Südtirol</option>
+        <option value="Fiorentina-Pisa">Fiorentina vs Pisa</option>
+        <option value="Parma-Cremonese">Parma vs Cremonese</option>
+        <option value="Torino-Monza">Torino vs Monza</option>
+        <option value="Sassuolo-Frosinone">Sassuolo vs Frosinone</option>
+        <option value="Udinese-Venezia">Udinese vs Venezia</option>
+        <option value="Palermo-Mantova">Palermo vs Mantova</option>
+        <option value="Cagliari-Verona">Cagliari vs Hellas Verona</option>
+      </select>
     </div>
 
-    <div class="sync-status">
-      <div class="status-dot"></div>
-      <span id="sync-text">BBD API Sincronizzata</span>
-      <button onclick="triggerSync()" style="width:auto; padding: 4px 8px; margin:0; font-size: 0.75rem;">Aggiorna BBD</button>
-    </div>
-  </header>
-
-  <div class="grid-2">
-    <!-- COLONNA SINISTRA -->
-    <div>
-      <div class="card">
-        <div class="card-title" id="match-card-title">Selezione Match Serie A</div>
-        
-<div id="coppa-fixtures-container" style="display:none;">
-  <label for="coppa-fixture">Sfida Sedicesimi Coppa Italia</label>
-  <select id="coppa-fixture" onchange="loadCoppaFixture()">
-    <option value="Genoa-Sudtirol">Genoa vs Südtirol</option>
-    <option value="Fiorentina-Pisa">Fiorentina vs Pisa</option>
-    <option value="Parma-Cremonese">Parma vs Cremonese</option>
-    <option value="Torino-Monza">Torino vs Monza</option>
-    <option value="Sassuolo-Frosinone">Sassuolo vs Frosinone</option>
-    <option value="Udinese-Venezia">Udinese vs Venezia</option>
-    <option value="Palermo-Mantova">Palermo vs Mantova</option>
-    <option value="Cagliari-Verona">Cagliari vs Hellas Verona</option>
-  </select>
-</div>
-
+    <!-- SELEZIONE SQUADRE LIBERA -->
+    <div id="manual-container" class="grid-2">
+      <div class="form-group">
         <label for="home-team">Squadra Casa</label>
-        <select id="home-team" onchange="calculatePrediction()">
-          <option value="Inter">Inter</option>
-          <option value="Juventus">Juventus</option>
-          <option value="Milan">Milan</option>
-          <option value="Atalanta">Atalanta</option>
-          <option value="Roma" selected>Roma</option>
-          <option value="Napoli">Napoli</option>
-          <option value="Lazio">Lazio</option>
-          <option value="Fiorentina">Fiorentina</option>
-          <option value="Bologna">Bologna</option>
-          <option value="Torino">Torino</option>
-          <option value="Cagliari">Cagliari</option>
-          <option value="Empoli">Empoli</option>
-          <option value="Monza">Monza</option>
-          <option value="Lecce">Lecce</option>
-          <option value="Genoa">Genoa</option>
-          <option value="Sassuolo">Sassuolo</option>
-          <option value="Cremonese">Cremonese</option>
-        </select>
-
+        <select id="home-team" onchange="updateStats('home')"></select>
+      </div>
+      <div class="form-group">
         <label for="away-team">Squadra Trasferta</label>
-        <select id="away-team" onchange="calculatePrediction()">
-          <option value="Inter">Inter</option>
-          <option value="Juventus" selected>Juventus</option>
-          <option value="Milan">Milan</option>
-          <option value="Atalanta">Atalanta</option>
-          <option value="Roma">Roma</option>
-          <option value="Napoli">Napoli</option>
-          <option value="Lazio">Lazio</option>
-          <option value="Fiorentina">Fiorentina</option>
-          <option value="Bologna">Bologna</option>
-          <option value="Torino">Torino</option>
-          <option value="Cagliari">Cagliari</option>
-          <option value="Empoli">Empoli</option>
-          <option value="Monza">Monza</option>
-          <option value="Lecce">Lecce</option>
-          <option value="Genoa">Genoa</option>
-          <option value="Sassuolo">Sassuolo</option>
-          <option value="Cremonese">Cremonese</option>
-        </select>
-
-        <label for="matchday" id="matchday-label">Giornata di Campionato</label>
-        <input type="number" id="matchday" min="1" max="38" value="8" onchange="calculatePrediction()">
-      </div>
-
-      <div class="card">
-        <div class="card-title">Modificatori Contestuali</div>
-        
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Titolari Casa (Turnover)</span>
-            <span id="home-starters-val">100%</span>
-          </div>
-          <input type="range" id="home-starters" min="50" max="100" value="100" oninput="updateSliders(); calculatePrediction();">
-        </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Titolari Trasferta (Turnover)</span>
-            <span id="away-starters-val">100%</span>
-          </div>
-          <input type="range" id="away-starters" min="50" max="100" value="100" oninput="updateSliders(); calculatePrediction();">
-        </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Riposo Casa</span>
-            <span id="home-rest-val">7 giorni</span>
-          </div>
-          <input type="range" id="home-rest" min="2" max="7" value="7" oninput="updateSliders(); calculatePrediction();">
-        </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Riposo Trasferta</span>
-            <span id="away-rest-val">7 giorni</span>
-          </div>
-          <input type="range" id="away-rest" min="2" max="7" value="7" oninput="updateSliders(); calculatePrediction();">
-        </div>
+        <select id="away-team" onchange="updateStats('away')"></select>
       </div>
     </div>
 
-    <!-- COLONNA DESTRA -->
-    <div>
-      <div class="card">
-        <div class="card-title">
-          Proiezioni Gol & 1X2 Regolamentari (90')
-          <span id="confidence-badge" class="badge" style="background:var(--accent-green);">Confidenza: 82%</span>
-        </div>
+    <button onclick="simulateMatch()">Simula Partita (10.000 iterazioni)</button>
+  </div>
 
-        <div class="stats-grid">
-          <div class="stat-box">
-            <div class="lbl">xG Casa</div>
-            <div class="val" id="xg-home">1.65</div>
-          </div>
-          <div class="stat-box">
-            <div class="lbl">xG Ospiti</div>
-            <div class="val" id="xg-away">1.02</div>
-          </div>
-          <div class="stat-box">
-            <div class="lbl">xG Totali Gara</div>
-            <div class="val" id="xg-total">2.67</div>
-          </div>
-          <div class="stat-box">
-            <div class="lbl">Qualificazione / Passaggio</div>
-            <div class="val" id="qualify-val">Casa 68%</div>
-          </div>
+  <!-- STATISTICHE SQUADRE -->
+  <div class="card">
+    <h3>Parametri Squadre</h3>
+    <div class="grid-2">
+      <div>
+        <h4 id="label-home">Casa</h4>
+        <div class="form-group">
+          <label>Forza Attacco</label>
+          <input type="number" id="home-att" step="0.05" value="1.0">
         </div>
-
-        <div class="prob-bars">
-          <div class="prob-row">
-            <div class="prob-label">1 (Casa)</div>
-            <div class="bar-bg"><div id="bar-1" class="bar-fill bar-1" style="width: 52%;"></div></div>
-            <div class="prob-val" id="prob-1">52%</div>
-          </div>
-          <div class="prob-row">
-            <div class="prob-label">X (Pari)</div>
-            <div class="bar-bg"><div id="bar-X" class="bar-fill bar-X" style="width: 26%;"></div></div>
-            <div class="prob-val" id="prob-X">26%</div>
-          </div>
-          <div class="prob-row">
-            <div class="prob-label">2 (Ospiti)</div>
-            <div class="bar-bg"><div id="bar-2" class="bar-fill bar-2" style="width: 22%;"></div></div>
-            <div class="prob-val" id="prob-2">22%</div>
-          </div>
+        <div class="form-group">
+          <label>Forza Difesa (minore = migliore)</label>
+          <input type="number" id="home-def" step="0.05" value="1.0">
         </div>
       </div>
-
-      <!-- TABS -->
-      <div class="card">
-        <div class="tabs">
-          <div class="tab active" onclick="switchTab('tab-markets')">Mercati V5</div>
-          <div class="tab" onclick="switchTab('tab-scores')">Risultati Esatti</div>
-          <div class="tab" onclick="switchTab('tab-backtest')">📈 Backtesting & ML</div>
-          <div class="tab" id="tab-xpts-btn" onclick="switchTab('tab-xpts')">Classifica xPTS</div>
+      <div>
+        <h4 id="label-away">Trasferta</h4>
+        <div class="form-group">
+          <label>Forza Attacco</label>
+          <input type="number" id="away-att" step="0.05" value="1.0">
         </div>
-
-        <!-- TAB 1: MERCATI -->
-        <div id="tab-markets">
-          <table>
-            <thead>
-              <tr><th>Mercato</th><th>Probabilità V5</th><th>Quota Equa</th></tr>
-            </thead>
-            <tbody id="markets-tbody"></tbody>
-          </table>
+        <div class="form-group">
+          <label>Forza Difesa (minore = migliore)</label>
+          <input type="number" id="away-def" step="0.05" value="1.0">
         </div>
-
-        <!-- TAB 2: RISULTATI ESATTI -->
-        <div id="tab-scores" style="display:none;">
-          <table>
-            <thead>
-              <tr><th>Risultato Esatto</th><th>Probabilità</th><th>Quota Equa</th></tr>
-            </thead>
-            <tbody id="scores-tbody"></tbody>
-          </table>
-        </div>
-
-        <!-- TAB 3: BACKTESTING & ACCURATEZZA -->
-        <div id="tab-backtest" style="display:none;">
-          <div style="margin-bottom: 15px;">
-            <p style="font-size:0.85rem; color:var(--text-muted);">Tracciamento automatico delle performance del modello V5 sulle giornate precedenti.</p>
-          </div>
-          <div class="stats-grid" style="margin-bottom: 15px;">
-            <div class="stat-box">
-              <div class="lbl">Brier Score (1X2)</div>
-              <div class="val" style="color:var(--accent-green);">0.182</div>
-            </div>
-            <div class="stat-box">
-              <div class="lbl">Errore Medio xG</div>
-              <div class="val" style="color:var(--accent-blue);">0.31</div>
-            </div>
-            <div class="stat-box">
-              <div class="lbl">Accuracy Esiti</div>
-              <div class="val" style="color:var(--accent-gold);">64.2%</div>
-            </div>
-          </div>
-          <canvas id="backtestChart" style="max-height: 200px; width:100%;"></canvas>
-        </div>
-
-        <!-- TAB 4: XPTS -->
-        <div id="tab-xpts" style="display:none;">
-          <table>
-            <thead>
-              <tr><th>Squadra</th><th>xG Fatti</th><th>xG Subiti</th><th>xPTS</th></tr>
-            </thead>
-            <tbody id="xpts-tbody"></tbody>
-          </table>
-        </div>
-
       </div>
     </div>
+  </div>
+
+  <!-- RISULTATI SIMULAZIONE -->
+  <div id="results" class="card results">
+    <h2>Risultati Simulazione</h2>
+
+    <div class="prob-bar-container">
+      <div class="prob-header">
+        <span>Vittoria Casa (1)</span>
+        <span id="prob-1">0%</span>
+      </div>
+      <div class="prob-bar-bg"><div id="bar-1" class="prob-bar-fill"></div></div>
+    </div>
+
+    <div class="prob-bar-container">
+      <div class="prob-header">
+        <span>Pareggio (X)</span>
+        <span id="prob-x">0%</span>
+      </div>
+      <div class="prob-bar-bg"><div id="bar-x" class="prob-bar-fill"></div></div>
+    </div>
+
+    <div class="prob-bar-container">
+      <div class="prob-header">
+        <span>Vittoria Trasferta (2)</span>
+        <span id="prob-2">0%</span>
+      </div>
+      <div class="prob-bar-bg"><div id="bar-2" class="prob-bar-fill"></div></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <p><strong>xG Attesi:</strong> <span id="xg-result">0 - 0</span></p>
+    </div>
+
+    <h3>Risultati Esatti più Probabili</h3>
+    <div id="scores-container" class="scores-list"></div>
   </div>
 </div>
 
 <script>
-  let currentComp = 'seriea';
-
+  // Dataset Squadre (Serie A + Altre squadre di Coppa Italia)
   const teamsData = {
-    'Inter': { att: 1.35, def: 0.70, xgFor: 2.1, xgAg: 0.9, xpts: 18.2 },
-    'Juventus': { att: 1.15, def: 0.60, xgFor: 1.6, xgAg: 0.7, xpts: 16.5 },
-    'Milan': { att: 1.25, def: 0.85, xgFor: 1.9, xgAg: 1.2, xpts: 15.1 },
-    'Atalanta': { att: 1.30, def: 0.90, xgFor: 2.0, xgAg: 1.3, xpts: 14.8 },
-    'Roma': { att: 1.10, def: 0.80, xgFor: 1.5, xgAg: 1.1, xpts: 13.9 },
-    'Napoli': { att: 1.20, def: 0.75, xgFor: 1.7, xgAg: 1.0, xpts: 15.8 },
-    'Lazio': { att: 1.05, def: 0.95, xgFor: 1.4, xgAg: 1.3, xpts: 12.2 },
-    'Fiorentina': { att: 1.00, def: 0.90, xgFor: 1.3, xgAg: 1.2, xpts: 11.8 },
-    'Bologna': { att: 0.95, def: 0.85, xgFor: 1.2, xgAg: 1.1, xpts: 11.5 },
-    'Torino': { att: 0.85, def: 0.90, xgFor: 1.0, xgAg: 1.2, xpts: 9.8 },
-    'Cagliari': { att: 0.80, def: 1.00, xgFor: 0.9, xgAg: 1.4, xpts: 8.5 },
-    'Empoli': { att: 0.75, def: 0.95, xgFor: 0.8, xgAg: 1.3, xpts: 8.1 },
-    'Monza': { att: 0.80, def: 1.05, xgFor: 0.9, xgAg: 1.5, xpts: 7.9 },
-    'Sassuolo': { att: 0.85, def: 1.10, xgFor: 1.0, xgAg: 1.5, xpts: 7.5 },
-    'Cremonese': { att: 0.70, def: 1.05, xgFor: 0.8, xgAg: 1.4, xpts: 6.8 }
-    'Sudtirol': { att: 0.70, def: 1.05, xgFor: 0.8, xgAg: 1.4, xpts: 0 },
-    'Pisa': { att: 0.75, def: 1.00, xgFor: 0.9, xgAg: 1.3, xpts: 0 },
-    'Frosinone': { att: 0.75, def: 1.10, xgFor: 0.9, xgAg: 1.5, xpts: 0 },
-    'Venezia': { att: 0.80, def: 1.05, xgFor: 1.0, xgAg: 1.4, xpts: 0 },
-    'Mantova': { att: 0.65, def: 1.15, xgFor: 0.7, xgAg: 1.6, xpts: 0 },
-    'Palermo': { att: 0.80, def: 1.00, xgFor: 1.0, xgAg: 1.3, xpts: 0 },
-    'Verona': { att: 0.80, def: 1.05, xgFor: 0.9, xgAg: 1.4, xpts: 0 },
-    'Parma': { att: 0.85, def: 1.00, xgFor: 1.1, xgAg: 1.3, xpts: 0 },
-    'Udinese': { att: 0.90, def: 0.90, xgFor: 1.2, xgAg: 1.2, xpts: 0 }
+    // Serie A
+    'Atalanta': { att: 1.25, def: 0.85 },
+    'Bologna': { att: 1.05, def: 0.90 },
+    'Cagliari': { att: 0.85, def: 1.10 },
+    'Como': { att: 0.90, def: 1.05 },
+    'Fiorentina': { att: 1.10, def: 0.95 },
+    'Genoa': { att: 0.90, def: 1.00 },
+    'Inter': { att: 1.40, def: 0.70 },
+    'Juventus': { att: 1.20, def: 0.75 },
+    'Lazio': { att: 1.10, def: 0.95 },
+    'Lecce': { att: 0.75, def: 1.15 },
+    'Milan': { att: 1.30, def: 0.85 },
+    'Monza': { att: 0.85, def: 1.05 },
+    'Napoli': { att: 1.25, def: 0.80 },
+    'Parma': { att: 0.85, def: 1.10 },
+    'Roma': { att: 1.15, def: 0.90 },
+    'Sassuolo': { att: 0.95, def: 1.05 },
+    'Torino': { att: 0.95, def: 0.90 },
+    'Udinese': { att: 0.90, def: 1.00 },
+    'Venezia': { att: 0.80, def: 1.15 },
+    'Verona': { att: 0.80, def: 1.10 },
+
+    // Squadre Coppa Italia (Serie B / Altre)
+    'Sudtirol': { att: 0.70, def: 1.10 },
+    'Pisa': { att: 0.75, def: 1.05 },
+    'Cremonese': { att: 0.80, def: 1.05 },
+    'Frosinone': { att: 0.75, def: 1.15 },
+    'Mantova': { att: 0.65, def: 1.20 },
+    'Palermo': { att: 0.85, def: 1.05 }
   };
 
-  function poisson(k, lambda) {
-    let factorial = 1;
-    for (let i = 2; i <= k; i++) factorial *= i;
-    return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial;
+  const AVG_HOME_GOALS = 1.45;
+  const AVG_AWAY_GOALS = 1.15;
+
+  function init() {
+    const homeSelect = document.getElementById('home-team');
+    const awaySelect = document.getElementById('away-team');
+    
+    // Popola i menu con la lista alfabetica
+    const teams = Object.keys(teamsData).sort();
+    teams.forEach(team => {
+      homeSelect.add(new Option(team, team));
+      awaySelect.add(new Option(team, team));
+    });
+
+    // Selezioni di default
+    homeSelect.value = 'Inter';
+    awaySelect.value = 'Juventus';
+    
+    updateStats('home');
+    updateStats('away');
   }
 
-  function setCompetition(comp) {
-    currentComp = comp;
-    document.getElementById('btn-seriea').classList.toggle('active', comp === 'seriea');
-    document.getElementById('btn-coppa').classList.toggle('active', comp === 'coppa');
+  function toggleMode() {
+    const comp = document.getElementById('competition').value;
+    const coppaContainer = document.getElementById('coppa-container');
+    const manualContainer = document.getElementById('manual-container');
 
     if (comp === 'coppa') {
-      document.getElementById('match-card-title').innerText = 'Sedicesimi Coppa Italia';
-      document.getElementById('coppa-fixtures-container').style.display = 'block';
-      document.getElementById('matchday-label').style.display = 'none';
-      document.getElementById('matchday').style.display = 'none';
-      document.getElementById('tab-xpts-btn').style.display = 'none';
+      coppaContainer.style.display = 'block';
+      manualContainer.style.display = 'none';
       loadCoppaFixture();
     } else {
-      document.getElementById('match-card-title').innerText = 'Selezione Match Serie A';
-      document.getElementById('coppa-fixtures-container').style.display = 'none';
-      document.getElementById('matchday-label').style.display = 'block';
-      document.getElementById('matchday').style.display = 'block';
-      document.getElementById('tab-xpts-btn').style.display = 'block';
-      calculatePrediction();
+      coppaContainer.style.display = 'none';
+      manualContainer.style.display = 'grid';
+      updateStats('home');
+      updateStats('away');
     }
   }
 
   function loadCoppaFixture() {
-    const val = document.getElementById('coppa-fixture').value.split('-');
-    document.getElementById('home-team').value = val[0];
-    document.getElementById('away-team').value = val[1];
-    calculatePrediction();
+    const fixture = document.getElementById('coppa-fixture').value;
+    const [home, away] = fixture.split('-');
+
+    document.getElementById('home-team').value = home;
+    document.getElementById('away-team').value = away;
+
+    updateStats('home');
+    updateStats('away');
   }
 
-  function updateSliders() {
-    document.getElementById('home-starters-val').innerText = document.getElementById('home-starters').value + '%';
-    document.getElementById('away-starters-val').innerText = document.getElementById('away-starters').value + '%';
-    document.getElementById('home-rest-val').innerText = document.getElementById('home-rest').value + ' gg';
-    document.getElementById('away-rest-val').innerText = document.getElementById('away-rest').value + ' gg';
-  }
-
-  function calculatePrediction() {
-    const homeName = document.getElementById('home-team').value;
-    const awayName = document.getElementById('away-team').value;
-
-    if (homeName === awayName) return;
-
-    const home = teamsData[homeName] || { att: 0.9, def: 1.0 };
-    const away = teamsData[awayName] || { att: 0.9, def: 1.0 };
-
-    const homeStarters = parseInt(document.getElementById('home-starters').value) / 100;
-    const awayStarters = parseInt(document.getElementById('away-starters').value) / 100;
-
-    // Fattore Campo Ridotto per Coppa Italia
-    const homeAdv = currentComp === 'coppa' ? 1.08 : 1.15;
-
-    let xgHome = (home.att * away.def * 1.25 * homeAdv * homeStarters);
-    let xgAway = (away.att * home.def * 1.05 * awayStarters);
-
-    document.getElementById('xg-home').innerText = xgHome.toFixed(2);
-    document.getElementById('xg-away').innerText = xgAway.toFixed(2);
-    document.getElementById('xg-total').innerText = (xgHome + xgAway).toFixed(2);
-
-    let pWinHome = 0, pDraw = 0, pWinAway = 0;
-    let pO25 = 0, pBTTS = 0;
-    let scores = [];
-
-    for (let h = 0; h <= 6; h++) {
-      for (let a = 0; a <= 6; a++) {
-        let prob = poisson(h, xgHome) * poisson(a, xgAway);
-        if (h === 0 && a === 0) prob *= 1.10;
-
-        if (h > a) pWinHome += prob;
-        else if (h === a) pDraw += prob;
-        else pWinAway += prob;
-
-        if (h + a > 2.5) pO25 += prob;
-        if (h > 0 && a > 0) pBTTS += prob;
-
-        scores.push({ score: `${h}-${a}`, prob: prob });
-      }
-    }
-
-    const totalProb = pWinHome + pDraw + pWinAway;
-    pWinHome /= totalProb; pDraw /= totalProb; pWinAway /= totalProb;
-
-    // Qualificazione (in caso di pareggio al 90', 50/50 ai rigori/supplementari)
-    const pQualHome = pWinHome + (pDraw * 0.52);
-    document.getElementById('qualify-val').innerText = `Casa ${(pQualHome * 100).toFixed(0)}%`;
-
-    document.getElementById('prob-1').innerText = (pWinHome * 100).toFixed(0) + '%';
-    document.getElementById('bar-1').style.width = (pWinHome * 100).toFixed(0) + '%';
-    document.getElementById('prob-X').innerText = (pDraw * 100).toFixed(0) + '%';
-    document.getElementById('bar-X').style.width = (pDraw * 100).toFixed(0) + '%';
-    document.getElementById('prob-2').innerText = (pWinAway * 100).toFixed(0) + '%';
-    document.getElementById('bar-2').style.width = (pWinAway * 100).toFixed(0) + '%';
-
-    const marketsTbody = document.getElementById('markets-tbody');
-    marketsTbody.innerHTML = `
-      <tr><td><b>Passaggio Turno / Qualificazione</b></td><td>${(pQualHome * 100).toFixed(1)}%</td><td>${(1/pQualHome).toFixed(2)}</td></tr>
-      <tr><td><b>Over 2.5 Gol (90')</b></td><td>${(pO25 * 100).toFixed(1)}%</td><td>${(1/pO25).toFixed(2)}</td></tr>
-      <tr><td><b>Goal (90')</b></td><td>${(pBTTS * 100).toFixed(1)}%</td><td>${(1/pBTTS).toFixed(2)}</td></tr>
-      <tr><td><b>Doppia Chance 1X</b></td><td>${((pWinHome + pDraw) * 100).toFixed(1)}%</td><td>${(1/(pWinHome + pDraw)).toFixed(2)}</td></tr>
-      <tr><td><b>Supplementari / Rigori (Sì)</b></td><td>${(pDraw * 100).toFixed(1)}%</td><td>${(1/pDraw).toFixed(2)}</td></tr>
-    `;
-
-    scores.sort((a, b) => b.prob - a.prob);
-    const scoresTbody = document.getElementById('scores-tbody');
-    scoresTbody.innerHTML = '';
-    scores.slice(0, 5).forEach(s => {
-      scoresTbody.innerHTML += `<tr><td><b>${s.score}</b></td><td>${(s.prob * 100).toFixed(1)}%</td><td>${(1/s.prob).toFixed(2)}</td></tr>`;
-    });
-
-    renderXPTS();
-  }
-
-  function renderXPTS() {
-    const tbody = document.getElementById('xpts-tbody');
-    tbody.innerHTML = '';
-    Object.keys(teamsData).slice(0, 10)
-      .sort((a,b) => teamsData[b].xpts - teamsData[a].xpts)
-      .forEach(team => {
-        const d = teamsData[team];
-        tbody.innerHTML += `<tr><td><b>${team}</b></td><td>${d.xgFor}</td><td>${d.xgAg}</td><td>${d.xpts}</td></tr>`;
-      });
-  }
-
-  function switchTab(tabId) {
-    ['tab-markets', 'tab-scores', 'tab-backtest', 'tab-xpts'].forEach(id => {
-      document.getElementById(id).style.display = (id === tabId) ? 'block' : 'none';
-    });
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
-
-    if (tabId === 'tab-backtest') initBacktestChart();
-  }
-
-  function initBacktestChart() {
-    const ctx = document.getElementById('backtestChart').getContext('2d');
-    if (window.myChart) window.myChart.destroy();
-    window.myChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8'],
-        datasets: [{
-          label: 'Brier Score (Accuratezza Modello)',
-          data: [0.24, 0.22, 0.21, 0.19, 0.19, 0.18, 0.18, 0.17],
-          borderColor: '#00d2ff',
-          tension: 0.3
-        }]
-      },
-      options: {
-        plugins: { legend: { display: false } },
-        scales: { y: { grid: { color: '#23314d' } }, x: { grid: { color: '#23314d' } } }
-      }
-    });
-  }
-
-  async function triggerSync() {
-    document.getElementById('sync-text').innerText = 'Sincronizzazione BBD...';
-    try {
-      const res = await fetch('/api/sync');
-      const data = await res.json();
-      if (res.ok) document.getElementById('sync-text').innerText = `Aggiornato (${data.fixtures_count} gare BBD)`;
-      else document.getElementById('sync-text').innerText = 'Verificare API Key Vercel';
-    } catch (e) {
-      document.getElementById('sync-text').innerText = 'Offline (Snapshot Locale)';
+  function updateStats(side) {
+    const teamName = document.getElementById(`${side}-team`).value;
+    document.getElementById(`label-${side}`).innerText = teamName;
+    if (teamsData[teamName]) {
+      document.getElementById(`${side}-att`).value = teamsData[teamName].att;
+      document.getElementById(`${side}-def`).value = teamsData[teamName].def;
     }
   }
 
-  calculatePrediction();
+  // Generatore numeri casuali secondo distribuzione di Poisson
+  function poissonRandom(lambda) {
+    let L = Math.exp(-lambda);
+    let k = 0;
+    let p = 1;
+    do {
+      k++;
+      p *= Math.random();
+    } while (p > L);
+    return k - 1;
+  }
+
+  function simulateMatch() {
+    const homeAtt = parseFloat(document.getElementById('home-att').value);
+    const homeDef = parseFloat(document.getElementById('home-def').value);
+    const awayAtt = parseFloat(document.getElementById('away-att').value);
+    const awayDef = parseFloat(document.getElementById('away-def').value);
+
+    // Calcolo expected goals (xG)
+    const lambdaHome = homeAtt * awayDef * AVG_HOME_GOALS;
+    const lambdaAway = awayAtt * homeDef * AVG_AWAY_GOALS;
+
+    const iterations = 10000;
+    let homeWins = 0;
+    let draws = 0;
+    let awayWins = 0;
+    const scoreCounts = {};
+
+    for (let i = 0; i < iterations; i++) {
+      const gHome = poissonRandom(lambdaHome);
+      const gAway = poissonRandom(lambdaAway);
+
+      if (gHome > gAway) homeWins++;
+      else if (gHome === gAway) draws++;
+      else awayWins++;
+
+      const key = `${gHome}-${gAway}`;
+      scoreCounts[key] = (scoreCounts[key] || 0) + 1;
+    }
+
+    // Aggiornamento UI
+    const p1 = ((homeWins / iterations) * 100).toFixed(1);
+    const px = ((draws / iterations) * 100).toFixed(1);
+    const p2 = ((awayWins / iterations) * 100).toFixed(1);
+
+    document.getElementById('prob-1').innerText = p1 + '%';
+    document.getElementById('prob-x').innerText = px + '%';
+    document.getElementById('prob-2').innerText = p2 + '%';
+
+    document.getElementById('bar-1').style.width = p1 + '%';
+    document.getElementById('bar-x').style.width = px + '%';
+    document.getElementById('bar-2').style.width = p2 + '%';
+
+    document.getElementById('xg-result').innerText = `${lambdaHome.toFixed(2)} - ${lambdaAway.toFixed(2)}`;
+
+    // Top risultati esatti
+    const sortedScores = Object.entries(scoreCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+
+    const scoresContainer = document.getElementById('scores-container');
+    scoresContainer.innerHTML = '';
+
+    sortedScores.forEach(([score, count]) => {
+      const perc = ((count / iterations) * 100).toFixed(1);
+      const div = document.createElement('div');
+      div.className = 'score-item';
+      div.innerHTML = `<div class="match">${score}</div><div class="perc">${perc}%</div>`;
+      scoresContainer.appendChild(div);
+    });
+
+    document.getElementById('results').style.display = 'block';
+  }
+
+  // Inizializza al caricamento della pagina
+  window.onload = init;
 </script>
 
 </body>
