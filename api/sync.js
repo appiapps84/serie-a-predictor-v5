@@ -1,52 +1,69 @@
 export default async function handler(req, res) {
-  // Legge la chiave dalle impostazioni di Vercel
   const API_KEY = process.env.FOOTBALL_API_KEY;
 
   if (!API_KEY) {
-    return res.status(401).json({ error: 'API Key non trovata su Vercel.' });
+    return res.status(401).json({ 
+      error: 'API_KEY_MISSING',
+      message: 'La variabile FOOTBALL_API_KEY non è configurata su Vercel.' 
+    });
   }
 
-  // Endpoint BBD per la Serie A
-  const API_URL = 'https://api.bigballsdata.com/v1/serie-a/fixtures?season=2026';
+  // Endpoints principali per le partite di Big Balls Data
+  const endpoints = [
+    'https://api.bigballsdata.com/v1/fixtures?league=serie-a',
+    'https://api.bigballsdata.com/v1/serie-a/fixtures',
+    'https://api.bigballsdata.com/v1/matches?competition=serie_a'
+  ];
 
-  try {
-    const response = await fetch(API_URL, {
-      headers: {
-        'X-API-Key': API_KEY, // Prova sia X-API-Key che Bearer token
-        'Authorization': `Bearer ${API_KEY}`,
-        'Accept': 'application/json'
-      }
-    });
+  let responseData = null;
+  let lastStatus = 404;
 
-    if (!response.ok) {
-      return res.status(response.status).json({ 
-        error: `Errore BBD (${response.status}): ${response.statusText}` 
+  for (const url of endpoints) {
+    try {
+      const resApi = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'X-API-Key': API_KEY,
+          'Accept': 'application/json'
+        }
       });
+
+      if (resApi.ok) {
+        responseData = await resApi.json();
+        break;
+      } else {
+        lastStatus = resApi.status;
+      }
+    } catch (e) {
+      // Prova il successivo se fallisce la connessione
     }
+  }
 
-    const rawData = await response.json();
-
-    const processedFixtures = (rawData || []).map(fixture => ({
-      id: fixture.id,
-      homeTeam: fixture.home_team,
-      awayTeam: fixture.away_team,
-      matchday: fixture.matchday,
-      homeStartersPct: Math.max(50, 100 - ((fixture.home_absentees_count || 0) * 7)),
-      awayStartersPct: Math.max(50, 100 - ((fixture.away_absentees_count || 0) * 7)),
-      homeRestDays: fixture.home_rest_days || 7,
-      awayRestDays: fixture.away_rest_days || 7
-    }));
-
-    return res.status(200).json({
-      last_updated: new Date().toISOString(),
-      source: 'Big Balls Data',
-      fixtures_count: processedFixtures.length,
-      fixtures: processedFixtures
-    });
-  } catch (error) {
-    return res.status(500).json({ 
-      error: 'Errore di connessione a BBD', 
-      details: error.message 
+  if (!responseData) {
+    return res.status(lastStatus).json({ 
+      error: 'BBD_ENDPOINT_NOT_FOUND',
+      status: lastStatus,
+      message: 'Impossibile trovare l\'endpoint corretto su Big Balls Data. Verificare l\'URL di base nella documentazione BBD.'
     });
   }
+
+  const rawData = Array.isArray(responseData) ? responseData : (responseData.data || []);
+
+  const processedFixtures = rawData.map(fixture => ({
+    id: fixture.id || fixture.match_id,
+    homeTeam: fixture.home_team || fixture.homeTeam,
+    awayTeam: fixture.away_team || fixture.awayTeam,
+    matchday: fixture.matchday || fixture.round || 8,
+    homeStartersPct: Math.max(50, 100 - ((fixture.home_absentees_count || 0) * 7)),
+    awayStartersPct: Math.max(50, 100 - ((fixture.away_absentees_count || 0) * 7)),
+    homeRestDays: fixture.home_rest_days || 7,
+    awayRestDays: fixture.away_rest_days || 7
+  }));
+
+  return res.status(200).json({
+    last_updated: new Date().toISOString(),
+    source: 'Big Balls Data',
+    fixtures_count: processedFixtures.length,
+    fixtures: processedFixtures
+  });
 }
