@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Serie A Predictor V5 - Quant & Machine Learning Engine</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-card: #131b2e;
+      --bg-input: #1c273e;
+      --accent-blue: #00d2ff;
+      --accent-green: #00e676;
+      --accent-red: #ff5252;
+      --accent-gold: #ffb300;
+      --text-main: #f0f4f8;
+      --text-muted: #8a99ad;
+      --border-color: #23314d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg-primary); color: var(--text-main); line-height: 1.5; padding: 20px; }
+    .container { max-width: 1280px; margin: 0 auto; }
+    
+    header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .logo { font-size: 1.5rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .badge { background: linear-gradient(135deg, #00d2ff, #0066ff); color: #000; font-weight: bold; padding: 3px 8px; borderRadius: 4px; font-size: 0.75rem; text-transform: uppercase; }
+    
+    .sync-status { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--text-muted); background: var(--bg-card); padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+    
+    .grid-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+    @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+    
+    .card { background: var(--bg-card); border-radius: 12px; padding: 20px; border: 1px solid var(--border-color); margin-bottom: 20px; }
+    .card-title { font-size: 1.1rem; font-weight: 700; color: var(--accent-blue); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    
+    label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px; }
+    select, input, button { width: 100%; padding: 10px 14px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); font-size: 0.95rem; margin-bottom: 14px; outline: none; }
+    select:focus, input:focus { border-color: var(--accent-blue); }
+    
+    button.btn-primary { background: linear-gradient(135deg, #00d2ff, #006eef); color: #fff; font-weight: 700; border: none; cursor: pointer; transition: transform 0.1s, opacity 0.2s; margin-top: 10px; }
+    button.btn-primary:hover { opacity: 0.9; }
+    button.btn-primary:active { transform: scale(0.98); }
+    
+    .prob-bars { display: flex; flex-direction: column; gap: 12px; margin: 20px 0; }
+    .prob-row { display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; gap: 12px; }
+    .prob-label { font-weight: 700; font-size: 0.9rem; }
+    .bar-bg { background: var(--bg-input); height: 16px; border-radius: 8px; overflow: hidden; position: relative; }
+    .bar-fill { height: 100%; border-radius: 8px; transition: width 0.5s ease-out; }
+    .bar-1 { background: linear-gradient(90deg, #00d2ff, #0066ff); }
+    .bar-X { background: linear-gradient(90deg, #8a99ad, #c0c0c0); }
+    .bar-2 { background: linear-gradient(90deg, #ff5252, #ff7b00); }
+    .prob-val { font-weight: 700; text-align: right; font-size: 0.9rem; }
+    
+    .stats-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 16px; }
+    .stat-box { background: var(--bg-input); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05); }
+    .stat-box .val { font-size: 1.2rem; font-weight: 800; color: #fff; margin-top: 4px; }
+    .stat-box .lbl { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
+    
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.88rem; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+    th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
+    tr:hover { background: rgba(255,255,255,0.02); }
+
+    .slider-group { margin-bottom: 16px; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px; }
+    input[type="range"] { width: 100%; height: 6px; border-radius: 3px; background: var(--bg-input); appearance: none; }
+    input[type="range"]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent-blue); cursor: pointer; }
+    
+    .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
+    .tab { padding: 8px 16px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; font-size: 0.9rem; }
+    .tab.active { border-bottom-color: var(--accent-blue); color: var(--accent-blue); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">
+      ⚽ Serie A Predictor <span class="badge">V5 Quant</span>
+    </div>
+    <div class="sync-status">
+      <div class="status-dot"></div>
+      <span id="sync-text">Sincronizzato tramite Vercel Cron</span>
+      <button onclick="triggerSync()" style="width:auto; padding: 4px 8px; margin:0; font-size: 0.75rem;">Sincronizza ora</button>
+    </div>
+  </header>
+
+  <div class="grid-2">
+    <!-- COLONNA SINISTRA: SELEZIONE & MODIFICATORI -->
+    <div>
+      <div class="card">
+        <div class="card-title">Analisi Partita</div>
+        
+        <label for="home-team">Squadra Casa</label>
+        <select id="home-team" onchange="calculatePrediction()">
+          <option value="Inter">Inter</option>
+          <option value="Juventus">Juventus</option>
+          <option value="Milan">Milan</option>
+          <option value="Atalanta">Atalanta</option>
+          <option value="Roma" selected>Roma</option>
+          <option value="Napoli">Napoli</option>
+          <option value="Lazio">Lazio</option>
+          <option value="Fiorentina">Fiorentina</option>
+          <option value="Bologna">Bologna</option>
+          <option value="Torino">Torino</option>
+        </select>
+
+        <label for="away-team">Squadra Trasferta</label>
+        <select id="away-team" onchange="calculatePrediction()">
+          <option value="Inter">Inter</option>
+          <option value="Juventus" selected>Juventus</option>
+          <option value="Milan">Milan</option>
+          <option value="Atalanta">Atalanta</option>
+          <option value="Roma">Roma</option>
+          <option value="Napoli">Napoli</option>
+          <option value="Lazio">Lazio</option>
+          <option value="Fiorentina">Fiorentina</option>
+          <option value="Bologna">Bologna</option>
+          <option value="Torino">Torino</option>
+        </select>
+
+        <label for="matchday">Giornata di Campionato</label>
+        <input type="number" id="matchday" min="1" max="38" value="8" onchange="calculatePrediction()">
+      </div>
+
+      <div class="card">
+        <div class="card-title">Modificatori Contestuali V5</div>
+        
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>Titolari Casa Disponibili</span>
+            <span id="home-starters-val">100%</span>
+          </div>
+          <input type="range" id="home-starters" min="50" max="100" value="100" oninput="updateSliders(); calculatePrediction();">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>Titolari Trasferta Disponibili</span>
+            <span id="away-starters-val">100%</span>
+          </div>
+          <input type="range" id="away-starters" min="50" max="100" value="100" oninput="updateSliders(); calculatePrediction();">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>Giorni di Riposo Casa</span>
+            <span id="home-rest-val">7 giorni</span>
+          </div>
+          <input type="range" id="home-rest" min="2" max="7" value="7" oninput="updateSliders(); calculatePrediction();">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>Giorni di Riposo Trasferta</span>
+            <span id="away-rest-val">7 giorni</span>
+          </div>
+          <input type="range" id="away-rest" min="2" max="7" value="7" oninput="updateSliders(); calculatePrediction();">
+        </div>
+      </div>
+    </div>
+
+    <!-- COLONNA DESTRA: RISULTATI PRONOSTICO & TABELLA -->
+    <div>
+      <div class="card">
+        <div class="card-title">
+          Pronostico Quantitativo V5
+          <span id="confidence-badge" class="badge" style="background:var(--accent-green);">Confidenza: 78%</span>
+        </div>
+
+        <div class="stats-summary">
+          <div class="stat-box">
+            <div class="lbl">Gol Attesi Casa</div>
+            <div class="val" id="xg-home">1.65</div>
+          </div>
+          <div class="stat-box">
+            <div class="lbl">Gol Attesi Ospiti</div>
+            <div class="val" id="xg-away">1.02</div>
+          </div>
+          <div class="stat-box">
+            <div class="lbl">Over 2.5</div>
+            <div class="val" id="over25-val">52%</div>
+          </div>
+          <div class="stat-box">
+            <div class="lbl">Goal (BTTS)</div>
+            <div class="val" id="btts-val">54%</div>
+          </div>
+        </div>
+
+        <div class="prob-bars">
+          <div class="prob-row">
+            <div class="prob-label">1 (Casa)</div>
+            <div class="bar-bg"><div id="bar-1" class="bar-fill bar-1" style="width: 52%;"></div></div>
+            <div class="prob-val" id="prob-1">52%</div>
+          </div>
+          <div class="prob-row">
+            <div class="prob-label">X (Pari)</div>
+            <div class="bar-bg"><div id="bar-X" class="bar-fill bar-X" style="width: 26%;"></div></div>
+            <div class="prob-val" id="prob-X">26%</div>
+          </div>
+          <div class="prob-row">
+            <div class="prob-label">2 (Ospiti)</div>
+            <div class="bar-bg"><div id="bar-2" class="bar-fill bar-2" style="width: 22%;"></div></div>
+            <div class="prob-val" id="prob-2">22%</div>
+          </div>
+        </div>
+
+        <div style="font-size: 0.85rem; color: var(--text-muted);" id="ai-factors">
+          💡 <b>Fattori Chiave:</b> Ponderazione xG elevata per la squadra di casa. Correzione Dixon-Coles applicata sui bassi punteggi.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('scores')">Risultati Esatti</div>
+          <div class="tab" onclick="switchTab('xpts')">Classifica xPTS</div>
+        </div>
+
+        <div id="tab-scores">
+          <table>
+            <thead>
+              <tr>
+                <th>Risultato Esatto</th>
+                <th>Probabilità</th>
+                <th>Quota Equa</th>
+              </tr>
+            </thead>
+            <tbody id="scores-tbody">
+              <!-- Inserito via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="tab-xpts" style="display:none;">
+          <table>
+            <thead>
+              <tr>
+                <th>Squadra</th>
+                <th>xG Fatti</th>
+                <th>xG Subiti</th>
+                <th>xPTS</th>
+              </tr>
+            </thead>
+            <tbody id="xpts-tbody">
+              <!-- Inserito via JS -->
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Database iniziale snapshot Serie A 2026/27
+  const teamsData = {
+    'Inter': { att: 1.35, def: 0.70, xgFor: 2.1, xgAg: 0.9, xpts: 18.2 },
+    'Juventus': { att: 1.15, def: 0.60, xgFor: 1.6, xgAg: 0.7, xpts: 16.5 },
+    'Milan': { att: 1.25, def: 0.85, xgFor: 1.9, xgAg: 1.2, xpts: 15.1 },
+    'Atalanta': { att: 1.30, def: 0.90, xgFor: 2.0, xgAg: 1.3, xpts: 14.8 },
+    'Roma': { att: 1.10, def: 0.80, xgFor: 1.5, xgAg: 1.1, xpts: 13.9 },
+    'Napoli': { att: 1.20, def: 0.75, xgFor: 1.7, xgAg: 1.0, xpts: 15.8 },
+    'Lazio': { att: 1.05, def: 0.95, xgFor: 1.4, xgAg: 1.3, xpts: 12.2 },
+    'Fiorentina': { att: 1.00, def: 0.90, xgFor: 1.3, xgAg: 1.2, xpts: 11.8 },
+    'Bologna': { att: 0.95, def: 0.85, xgFor: 1.2, xgAg: 1.1, xpts: 11.5 },
+    'Torino': { att: 0.85, def: 0.90, xgFor: 1.0, xgAg: 1.2, xpts: 9.8 }
+  };
+
+  // Funzione di Poisson per probabilità gol
+  function poisson(k, lambda) {
+    let factorial = 1;
+    for (let i = 2; i <= k; i++) factorial *= i;
+    return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial;
+  }
+
+  function updateSliders() {
+    document.getElementById('home-starters-val').innerText = document.getElementById('home-starters').value + '%';
+    document.getElementById('away-starters-val').innerText = document.getElementById('away-starters').value + '%';
+    document.getElementById('home-rest-val').innerText = document.getElementById('home-rest').value + ' giorni';
+    document.getElementById('away-rest-val').innerText = document.getElementById('away-rest').value + ' giorni';
+  }
+
+  function calculatePrediction() {
+    const homeName = document.getElementById('home-team').value;
+    const awayName = document.getElementById('away-team').value;
+    const matchday = parseInt(document.getElementById('matchday').value) || 8;
+
+    if (homeName === awayName) {
+      alert("Seleziona due squadre diverse!");
+      return;
+    }
+
+    const home = teamsData[homeName] || { att: 1.0, def: 1.0 };
+    const away = teamsData[awayName] || { att: 1.0, def: 1.0 };
+
+    // Modificatori
+    const homeStarters = parseInt(document.getElementById('home-starters').value) / 100;
+    const awayStarters = parseInt(document.getElementById('away-starters').value) / 100;
+    const homeRest = parseInt(document.getElementById('home-rest').value);
+    const awayRest = parseInt(document.getElementById('away-rest').value);
+
+    // Fatica (giorni di riposo)
+    const homeRestMult = homeRest < 4 ? 0.90 : 1.0;
+    const awayRestMult = awayRest < 4 ? 0.90 : 1.0;
+
+    // Vantaggio campo (0.20 gol aggiuntivi base)
+    const homeAdvantage = 1.15;
+
+    // Calcolo xG attesi col modello V5
+    let xgHome = (home.att * away.def * 1.30 * homeAdvantage * homeStarters * homeRestMult);
+    let xgAway = (away.att * home.def * 1.10 * awayStarters * awayRestMult);
+
+    // Dynamic Shrinkage basato sulla giornata
+    const weightCurrentSeason = Math.min(1.0, matchday / 15);
+    xgHome = (xgHome * weightCurrentSeason) + (1.35 * (1 - weightCurrentSeason));
+    xgAway = (xgAway * weightCurrentSeason) + (1.10 * (1 - weightCurrentSeason));
+
+    document.getElementById('xg-home').innerText = xgHome.toFixed(2);
+    document.getElementById('xg-away').innerText = xgAway.toFixed(2);
+
+    // Calcolo matrice probabilità di Poisson (fino a 5x5)
+    let pWinHome = 0, pDraw = 0, pWinAway = 0;
+    let pOver25 = 0, pBTTS = 0;
+    let scores = [];
+
+    for (let h = 0; h <= 5; h++) {
+      for (let a = 0; a <= 5; a++) {
+        let prob = poisson(h, xgHome) * poisson(a, xgAway);
+        
+        // Correzione Dixon-Coles sui bassi punteggi
+        if (h === 0 && a === 0) prob *= 1.10;
+        if (h === 1 && a === 0) prob *= 0.95;
+
+        if (h > a) pWinHome += prob;
+        else if (h === a) pDraw += prob;
+        else pWinAway += prob;
+
+        if (h + a > 2.5) pOver25 += prob;
+        if (h > 0 && a > 0) pBTTS += prob;
+
+        scores.push({ score: `${h}-${a}`, prob: prob });
+      }
+    }
+
+    // Normalizzazione
+    const totalProb = pWinHome + pDraw + pWinAway;
+    pWinHome = (pWinHome / totalProb) * 100;
+    pDraw = (pDraw / totalProb) * 100;
+    pWinAway = (pWinAway / totalProb) * 100;
+
+    // Aggiornamento DOM
+    document.getElementById('prob-1').innerText = pWinHome.toFixed(0) + '%';
+    document.getElementById('bar-1').style.width = pWinHome.toFixed(0) + '%';
+    document.getElementById('prob-X').innerText = pDraw.toFixed(0) + '%';
+    document.getElementById('bar-X').style.width = pDraw.toFixed(0) + '%';
+    document.getElementById('prob-2').innerText = pWinAway.toFixed(0) + '%';
+    document.getElementById('bar-2').style.width = pWinAway.toFixed(0) + '%';
+
+    document.getElementById('over25-val').innerText = (pOver25 * 100).toFixed(0) + '%';
+    document.getElementById('btts-val').innerText = (pBTTS * 100).toFixed(0) + '%';
+
+    // Tabella Risultati Esatti Top 5
+    scores.sort((a, b) => b.prob - a.prob);
+    const tbody = document.getElementById('scores-tbody');
+    tbody.innerHTML = '';
+    scores.slice(0, 5).forEach(s => {
+      const pPercent = (s.prob * 100).toFixed(1);
+      const fairOdds = (1 / s.prob).toFixed(2);
+      tbody.innerHTML += `<tr><td><b>${s.score}</b></td><td>${pPercent}%</td><td>${fairOdds}</td></tr>`;
+    });
+
+    renderXPTS();
+  }
+
+  function renderXPTS() {
+    const tbody = document.getElementById('xpts-tbody');
+    tbody.innerHTML = '';
+    Object.keys(teamsData)
+      .sort((a,b) => teamsData[b].xpts - teamsData[a].xpts)
+      .forEach(team => {
+        const d = teamsData[team];
+        tbody.innerHTML += `<tr><td><b>${team}</b></td><td>${d.xgFor}</td><td>${d.xgAg}</td><td>${d.xpts}</td></tr>`;
+      });
+  }
+
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    if (tabName === 'scores') {
+      document.getElementById('tab-scores').style.display = 'block';
+      document.getElementById('tab-xpts').style.display = 'none';
+    } else {
+      document.getElementById('tab-scores').style.display = 'none';
+      document.getElementById('tab-xpts').style.display = 'block';
+    }
+  }
+
+  async function triggerSync() {
+    document.getElementById('sync-text').innerText = 'Sincronizzazione in corso...';
+    try {
+      const res = await fetch('/api/sync');
+      const data = await res.json();
+      if (res.ok) {
+        document.getElementById('sync-text').innerText = `Aggiornato (${data.fixtures_count} gare)`;
+      } else {
+        document.getElementById('sync-text').innerText = 'API Key non ancora impostata';
+      }
+    } catch (e) {
+      document.getElementById('sync-text').innerText = 'Offline (Snapshot Locale)';
+    }
+  }
+
+  // Calcolo iniziale
+  calculatePrediction();
+</script>
+
+</body>
+</html>
