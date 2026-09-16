@@ -2,7 +2,8 @@ const BBS_BASE = "https://api.bigballsdata.com";
 const LEAGUE = "seriea";
 const SPORT = "football";
 
-const TIMEOUT = 8000;
+const MATCHES_TIMEOUT = 8000;
+const STANDINGS_TIMEOUT = 5000;
 
 function authHeaders(apiKey) {
   return {
@@ -12,7 +13,7 @@ function authHeaders(apiKey) {
   };
 }
 
-async function fetchJson(url, apiKey, timeoutMs = TIMEOUT) {
+async function fetchJson(url, apiKey, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -30,12 +31,14 @@ async function fetchJson(url, apiKey, timeoutMs = TIMEOUT) {
     try {
       data = text ? JSON.parse(text) : null;
     } catch {
-      data = { raw: text };
+      data = {
+        raw: text
+      };
     }
 
     return {
-      status: response.status,
       ok: response.ok,
+      status: response.status,
       data
     };
   } finally {
@@ -43,15 +46,15 @@ async function fetchJson(url, apiKey, timeoutMs = TIMEOUT) {
   }
 }
 
-function extractArray(data, keys = []) {
-  if (Array.isArray(data)) {
-    return data;
+function extractMatches(data) {
+  if (Array.isArray(data)) return data;
+
+  if (Array.isArray(data?.matches)) {
+    return data.matches;
   }
 
-  for (const key of keys) {
-    if (Array.isArray(data?.[key])) {
-      return data[key];
-    }
+  if (Array.isArray(data?.fixtures)) {
+    return data.fixtures;
   }
 
   if (Array.isArray(data?.data)) {
@@ -61,7 +64,90 @@ function extractArray(data, keys = []) {
   return [];
 }
 
+function extractStandings(data) {
+  /*
+    BBD restituisce:
+
+    {
+      data: {
+        standings: [
+          {
+            league_id: "...",
+            league_name: "Serie A",
+            season: "2026-27",
+            rows: [...]
+          }
+        ]
+      }
+    }
+  */
+
+  const leagues = data?.data?.standings;
+
+  if (!Array.isArray(leagues)) {
+    return [];
+  }
+
+  const currentLeague = leagues[0];
+
+  if (!currentLeague) {
+    return [];
+  }
+
+  if (Array.isArray(currentLeague.rows)) {
+    return currentLeague.rows;
+  }
+
+  return [];
+}
+
+function extractDirectMatchXG(match) {
+  const xg =
+    match?.xG ??
+    match?.xg ??
+    match?.expected_goals ??
+    match?.expectedGoals ??
+    null;
+
+  if (!xg || typeof xg !== "object") {
+    return null;
+  }
+
+  const home = Number(
+    xg.homeXG ??
+    xg.home_xg ??
+    xg.home ??
+    xg.home_expected_goals
+  );
+
+  const away = Number(
+    xg.awayXG ??
+    xg.away_xg ??
+    xg.away ??
+    xg.away_expected_goals
+  );
+
+  if (
+    !Number.isFinite(home) ||
+    !Number.isFinite(away) ||
+    home < 0 ||
+    away < 0
+  ) {
+    return null;
+  }
+
+  return {
+    homeXG: home,
+    awayXG: away
+  };
+}
+
 export default async function handler(req, res) {
+  res.setHeader(
+    "Cache-Control",
+    "s-maxage=120, stale-while-revalidate=300"
+  );
+
   if (req.method !== "GET") {
     return res.status(405).json({
       ok: false,
@@ -75,143 +161,140 @@ export default async function handler(req, res) {
   if (!apiKey) {
     return res.status(500).json({
       ok: false,
-      error: "MISSING_BBS_API_KEY"
+      error: "MISSING_BBS_API_KEY",
+      message: "BBS_API_KEY non configurata su Vercel."
     });
   }
 
+  const startedAt = Date.now();
+
   try {
-    // --------------------------------------------------
+    // =========================================================
     // MATCHES
-    // --------------------------------------------------
+    // =========================================================
 
     const matchesResult = await fetchJson(
       `${BBS_BASE}/v1/matches?sport=${SPORT}&league=${LEAGUE}`,
-      apiKey
+      apiKey,
+      MATCHES_TIMEOUT
     );
 
     if (!matchesResult.ok) {
       return res.status(502).json({
         ok: false,
         error: `BBS_${matchesResult.status}`,
+        message: "Errore BBD durante il recupero delle partite.",
         details: matchesResult.data
       });
     }
 
-    const matches = extractArray(matchesResult.data, [
-      "matches",
-      "fixtures"
-    ]);
+    const matches = extractMatches(matchesResult.data);
 
-    // --------------------------------------------------
+    // =========================================================
     // STANDINGS
-    // --------------------------------------------------
+    // =========================================================
 
-    const standingsResult = await fetchJson(
-      `${BBS_BASE}/v1/standings?sport=${SPORT}&league=${LEAGUE}`,
-      apiKey
-    );
+    let standings = [];
+    let standingsDiagnostic = {
+      status: null,
+      available: false,
+      season: null
+    };
 
-    const standings = extractArray(standingsResult.data, [
-      "standings",
-      "table",
-      "rows",
-      "teams"
-    ]);
-
-    // --------------------------------------------------
-    // LINEUP
-    // --------------------------------------------------
-
-    let lineups = [];
-    let lineupDiagnostic = null;
-
-    const firstMatch = matches[0];
-
-    const firstMatchId =
-      firstMatch?.id ||
-      firstMatch?.match_id ||
-      firstMatch?.fixture_id ||
-      null;
-
-    if (firstMatchId) {
-      const lineupResult = await fetchJson(
-        `${BBS_BASE}/v1/stored/matches/${encodeURIComponent(firstMatchId)}/lineups`,
-        apiKey
+    try {
+      const standingsResult = await fetchJson(
+        `${BBS_BASE}/v1/standings?sport=${SPORT}&league=${LEAGUE}`,
+        apiKey,
+        STANDINGS_TIMEOUT
       );
 
-      const lineupRows = extractArray(lineupResult.data, [
-        "lineups",
-        "players",
-        "home",
-        "away"
-      ]);
+      standingsDiagnostic.status = standingsResult.status;
 
-      if (lineupRows.length > 0) {
-        lineups.push({
-          matchId: firstMatchId,
-          data: lineupRows
-        });
+      standings = extractStandings(standingsResult.data);
+
+      const leagueBlock =
+        standingsResult.data?.data?.standings?.[0];
+
+      if (leagueBlock) {
+        standingsDiagnostic.available = standings.length > 0;
+        standingsDiagnostic.season =
+          leagueBlock.season || null;
       }
-
-      lineupDiagnostic = {
-        matchId: firstMatchId,
-        status: lineupResult.status,
-        available:
-          lineupResult.data?.meta?.available ??
-          lineupResult.data?.meta?.lineups_available ??
-          null,
-
-        response: lineupResult.data
-      };
+    } catch (error) {
+      standingsDiagnostic.error =
+        error?.name === "AbortError"
+          ? "TIMEOUT"
+          : String(error?.message || error);
     }
 
-    // --------------------------------------------------
-    // XG DIRETTAMENTE DALLE PARTITE
-    // --------------------------------------------------
+    // =========================================================
+    // XG PRESENTE DIRETTAMENTE NELLE PARTITE
+    // =========================================================
 
     const matchXG = {};
 
     for (const match of matches) {
-      const xg =
-        match?.xG ||
-        match?.xg ||
-        match?.expected_goals ||
-        match?.expectedGoals ||
+      const id =
+        match?.id ??
+        match?.match_id ??
+        match?.fixture_id ??
         null;
 
-      if (!xg || typeof xg !== "object") {
-        continue;
-      }
+      if (!id) continue;
 
-      const homeXG =
-        xg.homeXG ??
-        xg.home_xg ??
-        xg.home ??
-        null;
+      const xg = extractDirectMatchXG(match);
 
-      const awayXG =
-        xg.awayXG ??
-        xg.away_xg ??
-        xg.away ??
-        null;
-
-      if (
-        Number.isFinite(Number(homeXG)) &&
-        Number.isFinite(Number(awayXG))
-      ) {
-        const id =
-          match?.id ||
-          match?.match_id ||
-          match?.fixture_id;
-
-        if (id) {
-          matchXG[id] = {
-            homeXG: Number(homeXG),
-            awayXG: Number(awayXG)
-          };
-        }
+      if (xg) {
+        matchXG[id] = xg;
       }
     }
+
+    // =========================================================
+    // TEAM XG
+    //
+    // NON inventiamo xG.
+    // Verrà valorizzato quando BBD ce lo fornirà direttamente.
+    // =========================================================
+
+    const teamXG = {};
+
+    for (const match of matches) {
+      const id =
+        match?.id ??
+        match?.match_id ??
+        match?.fixture_id ??
+        null;
+
+      const xg = id ? matchXG[id] : null;
+
+      if (!xg) continue;
+
+      const homeName =
+        match?.home?.name ??
+        match?.home_name ??
+        null;
+
+      const awayName =
+        match?.away?.name ??
+        match?.away_name ??
+        null;
+
+      if (homeName) {
+        teamXG[homeName] = {
+          xG: xg.homeXG
+        };
+      }
+
+      if (awayName) {
+        teamXG[awayName] = {
+          xG: xg.awayXG
+        };
+      }
+    }
+
+    // =========================================================
+    // RISPOSTA
+    // =========================================================
 
     return res.status(200).json({
       ok: true,
@@ -222,45 +305,37 @@ export default async function handler(req, res) {
       coverage: {
         matches: matches.length,
         xG: Object.keys(matchXG).length,
-        teamsWithXG: 0,
-        lineups: lineups.length,
+        teamsWithXG: Object.keys(teamXG).length,
+
+        // Lineups volutamente non interrogate:
+        // evitiamo richieste inutili e rate limit.
+        lineups: 0,
+
         standings: standings.length
       },
 
       matches,
 
-      teamXG: {},
+      teamXG,
 
-      lineups,
+      lineups: [],
 
       standings,
 
       diagnostics: {
         matches: {
           status: matchesResult.status,
-          responseKeys:
-            matchesResult.data &&
-            typeof matchesResult.data === "object"
-              ? Object.keys(matchesResult.data)
-              : []
+          count: matches.length
         },
 
-        standings: {
-          status: standingsResult.status,
-          responseKeys:
-            standingsResult.data &&
-            typeof standingsResult.data === "object"
-              ? Object.keys(standingsResult.data)
-              : [],
-
-          raw: standingsResult.data
-        },
-
-        lineup: lineupDiagnostic,
+        standings: standingsDiagnostic,
 
         xG: {
-          found: Object.keys(matchXG).length
-        }
+          matchesWithXG: Object.keys(matchXG).length,
+          teamsWithXG: Object.keys(teamXG).length
+        },
+
+        elapsedMs: Date.now() - startedAt
       }
     });
 
@@ -270,8 +345,10 @@ export default async function handler(req, res) {
       error: "SYNC_FAILED",
       message:
         error?.name === "AbortError"
-          ? "BBS request timeout"
-          : error?.message || String(error)
+          ? "BBD request timeout"
+          : error?.message || String(error),
+
+      elapsedMs: Date.now() - startedAt
     });
   }
 }
