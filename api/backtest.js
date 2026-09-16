@@ -4,9 +4,9 @@ const SPORT = "football";
 const LEAGUE = "seriea";
 const YEAR = 2025;
 
-const MAX_CANDIDATE_MATCHES = 30;
-const MAX_TEST_MATCHES = 10;
-const MAX_STATS_REQUESTS = 10;
+const MAX_STORED_MATCHES = 200;
+const MAX_XG_REQUESTS = 5;
+const MAX_TEST_MATCHES = 5;
 
 const LIST_TIMEOUT = 8000;
 const STATS_TIMEOUT = 8000;
@@ -75,9 +75,12 @@ async function fetchJson(url, timeout = 8000) {
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new Error(
+    const error = new Error(
       `Risposta non JSON da BBD (${response.status})`
     );
+
+    error.status = response.status;
+    throw error;
   }
 
   if (!response.ok) {
@@ -92,17 +95,39 @@ async function fetchJson(url, timeout = 8000) {
     error.retryAfter =
       Number(response.headers.get("retry-after")) || 0;
 
+    error.cooldown =
+      Number(
+        response.headers.get(
+          "x-ratelimit-4xx-cooldown"
+        )
+      ) || 0;
+
     throw error;
   }
 
-  return payload;
+  return {
+    payload,
+    headers: response.headers
+  };
 }
 
 function extractArray(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.matches)) return payload.matches;
-  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
+
+  if (Array.isArray(payload?.matches)) {
+    return payload.matches;
+  }
+
+  if (Array.isArray(payload?.results)) {
+    return payload.results;
+  }
+
   return [];
 }
 
@@ -160,7 +185,9 @@ function extractDate(match) {
     match?.game_date ||
     null;
 
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
 
   const date = new Date(value);
 
@@ -178,7 +205,9 @@ function extractScore(match) {
     match?.result ||
     null;
 
-  if (!score) return null;
+  if (!score) {
+    return null;
+  }
 
   const home =
     number(score.home) ??
@@ -198,7 +227,10 @@ function extractScore(match) {
     return null;
   }
 
-  return { home, away };
+  return {
+    home,
+    away
+  };
 }
 
 function normalizeMatch(match) {
@@ -212,8 +244,11 @@ function normalizeMatch(match) {
 
     homeTeam: extractHomeTeam(match),
     awayTeam: extractAwayTeam(match),
+
     date: extractDate(match),
+
     score: extractScore(match),
+
     xG: null
   };
 }
@@ -232,148 +267,13 @@ function dateKey(date) {
   return date.toISOString().slice(0, 10);
 }
 
-function monthDays(year, month) {
-  return new Date(
-    Date.UTC(year, month + 1, 0)
-  ).getUTCDate();
-}
-
-/*
- * Recupera tutto il 2025.
- *
- * Prima prova il range mensile.
- * Se BBD non restituisce risultati per il range,
- * usa il filtro date giornaliero.
- *
- * Questa parte non fa chiamate stats:
- * sono le chiamate costose che vogliamo limitare.
- */
-async function fetch2025Matches() {
-  const rawRows = [];
-  const diagnostics = [];
-
-  for (let month = 0; month < 12; month++) {
-    const firstDay =
-      `${YEAR}-${String(month + 1).padStart(2, "0")}-01`;
-
-    const lastDay =
-      `${YEAR}-${String(month + 1).padStart(2, "0")}-${String(
-        monthDays(YEAR, month)
-      ).padStart(2, "0")}`;
-
-    let rangeWorked = false;
-
-    const rangeUrl =
-      `${BBS_BASE}/v1/stored/matches` +
-      `?sport=${SPORT}` +
-      `&league=${LEAGUE}` +
-      `&status=finished` +
-      `&date_from=${firstDay}` +
-      `&date_to=${lastDay}` +
-      `&limit=200`;
-
-    try {
-      const payload =
-        await fetchJson(
-          rangeUrl,
-          LIST_TIMEOUT
-        );
-
-      const rows =
-        extractArray(payload);
-
-      const valid =
-        rows.filter(row => {
-          const date =
-            extractDate(row);
-
-          return (
-            date &&
-            date.getUTCFullYear() === YEAR &&
-            date.getUTCMonth() === month
-          );
-        });
-
-      if (valid.length > 0) {
-        rawRows.push(...valid);
-        rangeWorked = true;
-      }
-    } catch (error) {
-      /*
-       * Fallback sotto.
-       */
-    }
-
-    /*
-     * Fallback giornaliero.
-     *
-     * Non viene eseguito se il range mensile
-     * ha restituito dati.
-     */
-    if (!rangeWorked) {
-      const days =
-        monthDays(YEAR, month);
-
-      for (let day = 1; day <= days; day++) {
-        const date =
-          `${YEAR}-${String(month + 1).padStart(2, "0")}-${String(
-            day
-          ).padStart(2, "0")}`;
-
-        const url =
-          `${BBS_BASE}/v1/stored/matches` +
-          `?sport=${SPORT}` +
-          `&league=${LEAGUE}` +
-          `&status=finished` +
-          `&date=${date}` +
-          `&limit=200`;
-
-        try {
-          const payload =
-            await fetchJson(
-              url,
-              LIST_TIMEOUT
-            );
-
-          rawRows.push(
-            ...extractArray(payload)
-          );
-        } catch (error) {
-          /*
-           * Un singolo giorno non blocca
-           * l'intero backtest.
-           */
-        }
-      }
-    }
-
-    diagnostics.push({
-      month: month + 1,
-      range: `${firstDay} → ${lastDay}`,
-      mode: rangeWorked ? "range" : "daily"
-    });
-  }
-
-  return {
-    rawRows,
-    diagnostics
-  };
-}
-
 function uniqueMatches(rows) {
   const map = new Map();
 
   for (const raw of rows) {
-    const match =
-      normalizeMatch(raw);
+    const match = normalizeMatch(raw);
 
     if (!isValidMatch(match)) {
-      continue;
-    }
-
-    if (
-      match.date.getUTCFullYear() !== YEAR
-    ) {
       continue;
     }
 
@@ -391,9 +291,79 @@ function uniqueMatches(rows) {
 }
 
 /*
- * Cerca xG nella risposta stats.
+ * =========================================================
+ * CARICAMENTO STORICO
+ * =========================================================
+ *
+ * UNA SOLA chiamata.
+ *
+ * Niente:
+ * - richieste giornaliere
+ * - richieste mensili
+ * - fallback automatici
+ * - retry
+ *
+ * Questo è fondamentale per non bruciare la quota BBD.
  */
-function extractXG(payload, homeTeam, awayTeam) {
+async function fetchStoredMatches() {
+  const url =
+    `${BBS_BASE}/v1/stored/matches` +
+    `?sport=${SPORT}` +
+    `&league=${LEAGUE}` +
+    `&status=finished` +
+    `&sort=desc` +
+    `&limit=${MAX_STORED_MATCHES}`;
+
+  try {
+    const result =
+      await fetchJson(
+        url,
+        LIST_TIMEOUT
+      );
+
+    return {
+      ok: true,
+      rows:
+        extractArray(
+          result.payload
+        ),
+      pagination:
+        result.payload?.pagination ||
+        null
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      rows: [],
+      error: {
+        status:
+          error?.status || null,
+
+        message:
+          error?.message ||
+          "Errore BBD",
+
+        retryAfter:
+          error?.retryAfter || 0,
+
+        cooldown:
+          error?.cooldown || 0
+      }
+    };
+  }
+}
+
+/*
+ * =========================================================
+ * XG
+ * =========================================================
+ */
+
+function extractXG(
+  payload,
+  homeTeam,
+  awayTeam
+) {
   const data =
     payload?.data ??
     payload;
@@ -410,8 +380,10 @@ function extractXG(payload, homeTeam, awayTeam) {
     data?.home?.XG,
     data?.home?.expected_goals,
     data?.home?.expectedGoals,
+
     data?.home_xg,
     data?.homeXG,
+
     data?.expected_goals_home,
     data?.expectedGoalsHome
   ];
@@ -421,8 +393,10 @@ function extractXG(payload, homeTeam, awayTeam) {
     data?.away?.XG,
     data?.away?.expected_goals,
     data?.away?.expectedGoals,
+
     data?.away_xg,
     data?.awayXG,
+
     data?.expected_goals_away,
     data?.expectedGoalsAway
   ];
@@ -537,20 +511,13 @@ function extractXG(payload, homeTeam, awayTeam) {
   return null;
 }
 
-/*
- * Recupera xG di una singola partita.
- *
- * NON fa retry automatici su 429.
- * Se arriva 429, interrompe il ciclo
- * principale per proteggere la quota.
- */
 async function fetchMatchXG(match) {
   const url =
     `${BBS_BASE}/v1/stored/matches/` +
     `${encodeURIComponent(match.id)}/stats`;
 
   try {
-    const payload =
+    const result =
       await fetchJson(
         url,
         STATS_TIMEOUT
@@ -558,7 +525,7 @@ async function fetchMatchXG(match) {
 
     const xG =
       extractXG(
-        payload,
+        result.payload,
         match.homeTeam,
         match.awayTeam
       );
@@ -567,18 +534,24 @@ async function fetchMatchXG(match) {
       return {
         ok: false,
         rateLimited: false,
+
         reason:
-          payload?.meta?.coverage_note ||
-          "xG non presente",
-        payloadMeta:
-          payload?.meta || null
+          result.payload?.meta?.coverage_note ||
+          "Stats disponibili ma xG non trovato.",
+
+        meta:
+          result.payload?.meta ||
+          null
       };
     }
 
     return {
       ok: true,
       rateLimited: false,
-      xG
+      xG,
+      meta:
+        result.payload?.meta ||
+        null
     };
   } catch (error) {
     if (
@@ -587,8 +560,13 @@ async function fetchMatchXG(match) {
       return {
         ok: false,
         rateLimited: true,
+
         retryAfter:
           error.retryAfter || 0,
+
+        cooldown:
+          error.cooldown || 0,
+
         reason:
           error.message
       };
@@ -597,12 +575,19 @@ async function fetchMatchXG(match) {
     return {
       ok: false,
       rateLimited: false,
+
       reason:
         error?.message ||
-        "Errore stats"
+        "Errore stats."
     };
   }
 }
+
+/*
+ * =========================================================
+ * FORM
+ * =========================================================
+ */
 
 function getRecentMatches(
   history,
@@ -626,10 +611,12 @@ function getRecentMatches(
       }
 
       return (
-        normalizeName(match.homeTeam) ===
-          wanted ||
-        normalizeName(match.awayTeam) ===
-          wanted
+        normalizeName(
+          match.homeTeam
+        ) === wanted ||
+        normalizeName(
+          match.awayTeam
+        ) === wanted
       );
     })
     .sort(
@@ -692,10 +679,13 @@ function getForm(
 
   return {
     matches: rows.length,
+
     goalsForPerGame:
       goalsFor / rows.length,
+
     goalsAgainstPerGame:
       goalsAgainst / rows.length,
+
     pointsPerGame:
       points / rows.length
   };
@@ -746,12 +736,20 @@ function getRollingXG(
 
   return {
     matches: rows.length,
+
     xGFor:
       xGFor / rows.length,
+
     xGAgainst:
       xGAgainst / rows.length
   };
 }
+
+/*
+ * =========================================================
+ * MODELLI
+ * =========================================================
+ */
 
 function baselineModel(
   homeTeam,
@@ -794,16 +792,24 @@ function baselineModel(
 
     homeXG *= clamp(
       0.90 +
-        (homeForm.pointsPerGame / 3) *
-          0.15,
+        (
+          homeForm.pointsPerGame /
+          3
+        ) *
+        0.15,
+
       0.90,
       1.05
     );
 
     awayXG *= clamp(
       0.90 +
-        (awayForm.pointsPerGame / 3) *
-          0.15,
+        (
+          awayForm.pointsPerGame /
+          3
+        ) *
+        0.15,
+
       0.90,
       1.05
     );
@@ -812,17 +818,19 @@ function baselineModel(
   homeXG *= 1.06;
 
   return {
-    home: clamp(
-      homeXG,
-      0.15,
-      4.5
-    ),
+    home:
+      clamp(
+        homeXG,
+        0.15,
+        4.5
+      ),
 
-    away: clamp(
-      awayXG,
-      0.10,
-      4.0
-    )
+    away:
+      clamp(
+        awayXG,
+        0.10,
+        4.0
+      )
   };
 }
 
@@ -860,7 +868,9 @@ function xGModel(
   ) {
     return {
       ...baseline,
+
       available: false,
+
       previousXGMatches: 0
     };
   }
@@ -879,7 +889,8 @@ function xGModel(
       awayXG.xGAgainst / 1.20,
       0.80,
       1.20
-    ) * 0.10;
+    ) *
+    0.10;
 
   awayExpected *=
     0.90 +
@@ -887,20 +898,23 @@ function xGModel(
       homeXG.xGAgainst / 1.20,
       0.80,
       1.20
-    ) * 0.10;
+    ) *
+    0.10;
 
   return {
-    home: clamp(
-      homeExpected,
-      0.15,
-      4.5
-    ),
+    home:
+      clamp(
+        homeExpected,
+        0.15,
+        4.5
+      ),
 
-    away: clamp(
-      awayExpected,
-      0.10,
-      4.0
-    ),
+    away:
+      clamp(
+        awayExpected,
+        0.10,
+        4.0
+      ),
 
     available: true,
 
@@ -912,12 +926,20 @@ function xGModel(
   };
 }
 
+/*
+ * =========================================================
+ * POISSON + DIXON COLES
+ * =========================================================
+ */
+
 function poisson(k, lambda) {
   if (
     !Number.isFinite(lambda) ||
     lambda <= 0
   ) {
-    return k === 0 ? 1 : 0;
+    return k === 0
+      ? 1
+      : 0;
   }
 
   let factorial = 1;
@@ -946,7 +968,10 @@ function dixonColes(
   const rho =
     DIXON_COLES_RHO;
 
-  if (h === 0 && a === 0) {
+  if (
+    h === 0 &&
+    a === 0
+  ) {
     return (
       1 -
       homeXG *
@@ -955,15 +980,30 @@ function dixonColes(
     );
   }
 
-  if (h === 0 && a === 1) {
-    return 1 + homeXG * rho;
+  if (
+    h === 0 &&
+    a === 1
+  ) {
+    return (
+      1 +
+      homeXG * rho
+    );
   }
 
-  if (h === 1 && a === 0) {
-    return 1 + awayXG * rho;
+  if (
+    h === 1 &&
+    a === 0
+  ) {
+    return (
+      1 +
+      awayXG * rho
+    );
   }
 
-  if (h === 1 && a === 1) {
+  if (
+    h === 1 &&
+    a === 1
+  ) {
     return 1 - rho;
   }
 
@@ -975,6 +1015,7 @@ function buildMatrix(
   awayXG
 ) {
   const matrix = [];
+
   let total = 0;
 
   for (
@@ -990,8 +1031,14 @@ function buildMatrix(
       a++
     ) {
       const p =
-        poisson(h, homeXG) *
-        poisson(a, awayXG) *
+        poisson(
+          h,
+          homeXG
+        ) *
+        poisson(
+          a,
+          awayXG
+        ) *
         dixonColes(
           h,
           a,
@@ -1027,7 +1074,9 @@ function buildMatrix(
   return matrix;
 }
 
-function getProbabilities(matrix) {
+function getProbabilities(
+  matrix
+) {
   let home = 0;
   let draw = 0;
   let away = 0;
@@ -1062,6 +1111,12 @@ function getProbabilities(matrix) {
   };
 }
 
+/*
+ * =========================================================
+ * METRICHE
+ * =========================================================
+ */
+
 function actualResult(score) {
   if (
     score.home >
@@ -1080,17 +1135,23 @@ function actualResult(score) {
   return "away";
 }
 
-function predictedResult(p) {
+function predictedResult(
+  probabilities
+) {
   if (
-    p.home >= p.draw &&
-    p.home >= p.away
+    probabilities.home >=
+      probabilities.draw &&
+    probabilities.home >=
+      probabilities.away
   ) {
     return "home";
   }
 
   if (
-    p.draw >= p.home &&
-    p.draw >= p.away
+    probabilities.draw >=
+      probabilities.home &&
+    probabilities.draw >=
+      probabilities.away
   ) {
     return "draw";
   }
@@ -1098,33 +1159,54 @@ function predictedResult(p) {
   return "away";
 }
 
-function brier(p, actual) {
+function brier(
+  probabilities,
+  actual
+) {
   return (
     Math.pow(
-      p.home -
-        (actual === "home" ? 1 : 0),
+      probabilities.home -
+        (
+          actual === "home"
+            ? 1
+            : 0
+        ),
       2
     ) +
+
     Math.pow(
-      p.draw -
-        (actual === "draw" ? 1 : 0),
+      probabilities.draw -
+        (
+          actual === "draw"
+            ? 1
+            : 0
+        ),
       2
     ) +
+
     Math.pow(
-      p.away -
-        (actual === "away" ? 1 : 0),
+      probabilities.away -
+        (
+          actual === "away"
+            ? 1
+            : 0
+        ),
       2
     )
   );
 }
 
-function logLoss(p, actual) {
-  const epsilon = 0.000001;
+function logLoss(
+  probabilities,
+  actual
+) {
+  const epsilon =
+    0.000001;
 
   return -Math.log(
     Math.max(
       epsilon,
-      p[actual]
+      probabilities[actual]
     )
   );
 }
@@ -1199,6 +1281,12 @@ function finalize(metrics) {
   };
 }
 
+/*
+ * =========================================================
+ * HANDLER
+ * =========================================================
+ */
+
 export default async function handler(
   req,
   res
@@ -1211,7 +1299,10 @@ export default async function handler(
   if (req.method !== "GET") {
     return res.status(405).json({
       ok: false,
-      error: "METHOD_NOT_ALLOWED",
+
+      error:
+        "METHOD_NOT_ALLOWED",
+
       message:
         "Usa GET per /api/backtest."
     });
@@ -1220,7 +1311,10 @@ export default async function handler(
   if (!process.env.BBS_API_KEY) {
     return res.status(500).json({
       ok: false,
-      error: "MISSING_API_KEY",
+
+      error:
+        "MISSING_API_KEY",
+
       message:
         "BBS_API_KEY non configurata."
     });
@@ -1228,45 +1322,83 @@ export default async function handler(
 
   try {
     /*
-     * ==========================================
-     * 1. CARICAMENTO PARTITE 2025
-     * ==========================================
+     * =====================================================
+     * 1. UNA SOLA RICHIESTA PER LE PARTITE
+     * =====================================================
      */
 
-    const {
-      rawRows,
-      diagnostics: monthDiagnostics
-    } = await fetch2025Matches();
+    const stored =
+      await fetchStoredMatches();
+
+    if (!stored.ok) {
+      return res.status(
+        stored.error.status === 429
+          ? 429
+          : 500
+      ).json({
+        ok: false,
+
+        error:
+          stored.error.status === 429
+            ? "BBS_RATE_LIMIT"
+            : "BBS_STORED_MATCHES_ERROR",
+
+        message:
+          stored.error.message,
+
+        retryAfter:
+          stored.error.retryAfter,
+
+        cooldown:
+          stored.error.cooldown,
+
+        diagnostics: {
+          requests: 1,
+
+          note:
+            "Nessun retry automatico. Rispetta Retry-After."
+        }
+      });
+    }
+
+    const rawRows =
+      stored.rows;
 
     const allMatches =
-      uniqueMatches(rawRows);
+      uniqueMatches(
+        rawRows
+      );
 
     /*
-     * Partiamo dalle partite più recenti.
-     *
-     * Questo aumenta la probabilità di trovare
-     * stats/xG disponibili.
+     * Solo partite dell'anno solare 2025.
+     */
+    const matches2025 =
+      allMatches.filter(
+        match =>
+          match.date.getUTCFullYear() ===
+          YEAR
+      );
+
+    /*
+     * Le più recenti prima.
      */
     const candidates =
-      allMatches
-        .slice(
-          Math.max(
-            0,
-            allMatches.length -
-              MAX_CANDIDATE_MATCHES
-          )
+      matches2025
+        .slice()
+        .sort(
+          (a, b) =>
+            b.date.getTime() -
+            a.date.getTime()
         )
-        .reverse();
+        .slice(
+          0,
+          MAX_XG_REQUESTS
+        );
 
     /*
-     * ==========================================
-     * 2. TEST xG
-     * ==========================================
-     *
-     * MASSIMO 10 chiamate.
-     *
-     * Non facciamo retry automatici.
-     * Se BBD restituisce 429, STOP immediato.
+     * =====================================================
+     * 2. XG
+     * =====================================================
      */
 
     const statsDiagnostics = [];
@@ -1276,28 +1408,28 @@ export default async function handler(
     let statsRequests = 0;
     let statsUnavailable = 0;
     let statsErrors = 0;
+
     let rateLimited = false;
     let retryAfter = 0;
+    let cooldown = 0;
 
     for (
       const match of candidates
     ) {
       if (
         statsRequests >=
-        MAX_STATS_REQUESTS
+        MAX_XG_REQUESTS
       ) {
         break;
       }
 
       /*
-       * Piccola pausa per evitare burst.
-       *
-       * Non aspettiamo 1 minuto:
-       * il limite è 100/min e noi siamo
-       * molto sotto quel limite.
+       * Piccola pausa tra le richieste.
        */
-      if (statsRequests > 0) {
-        await sleep(800);
+      if (
+        statsRequests > 0
+      ) {
+        await sleep(1000);
       }
 
       statsRequests++;
@@ -1308,7 +1440,8 @@ export default async function handler(
         );
 
       if (result.ok) {
-        match.xG = result.xG;
+        match.xG =
+          result.xG;
 
         xGMatches.push(
           match
@@ -1316,17 +1449,24 @@ export default async function handler(
 
         statsDiagnostics.push({
           id: match.id,
+
           date:
             dateKey(match.date),
+
           home:
             match.homeTeam,
+
           away:
             match.awayTeam,
+
           xG: true,
+
           homeXG:
             result.xG.home,
+
           awayXG:
             result.xG.away,
+
           source:
             result.xG.source
         });
@@ -1342,34 +1482,39 @@ export default async function handler(
         retryAfter =
           result.retryAfter || 0;
 
+        cooldown =
+          result.cooldown || 0;
+
         statsDiagnostics.push({
           id: match.id,
+
           date:
             dateKey(match.date),
+
           home:
             match.homeTeam,
+
           away:
             match.awayTeam,
+
           xG: false,
+
           rateLimited: true,
+
           retryAfter,
+
+          cooldown,
+
           reason:
             result.reason
         });
 
         /*
-         * STOP.
-         *
-         * Importantissimo:
-         * non continuiamo a bombardare BBD.
+         * STOP ASSOLUTO.
          */
         break;
       }
 
-      /*
-       * Stats endpoint ha risposto,
-       * ma senza xG.
-       */
       if (
         result.reason
       ) {
@@ -1377,15 +1522,23 @@ export default async function handler(
 
         statsDiagnostics.push({
           id: match.id,
+
           date:
             dateKey(match.date),
+
           home:
             match.homeTeam,
+
           away:
             match.awayTeam,
+
           xG: false,
+
           reason:
-            result.reason
+            result.reason,
+
+          meta:
+            result.meta || null
         });
       } else {
         statsErrors++;
@@ -1393,23 +1546,16 @@ export default async function handler(
     }
 
     /*
-     * ==========================================
+     * =====================================================
      * 3. BACKTEST
-     * ==========================================
-     *
-     * Per fare un confronto con xG abbiamo
-     * bisogno di almeno una finestra storica.
-     *
-     * Per questa v2 usiamo solo le partite
-     * che abbiamo realmente interrogato.
-     *
-     * Non inventiamo xG mancanti.
+     * =====================================================
      */
 
     const history =
       allMatches
-        .filter(match =>
-          match.date
+        .filter(
+          match =>
+            match.date
         )
         .sort(
           (a, b) =>
@@ -1417,8 +1563,16 @@ export default async function handler(
             b.date.getTime()
         );
 
+    /*
+     * Usiamo massimo 5 partite.
+     *
+     * Se non ci sono xG storici precedenti,
+     * il modello xG viene correttamente marcato
+     * come non disponibile.
+     */
     const testMatches =
       xGMatches
+        .slice()
         .sort(
           (a, b) =>
             a.date.getTime() -
@@ -1449,7 +1603,8 @@ export default async function handler(
       const match of testMatches
     ) {
       /*
-       * SOLO dati precedenti alla partita.
+       * Leakage protection:
+       * SOLO partite precedenti.
        */
       const previous =
         history.filter(
@@ -1458,9 +1613,6 @@ export default async function handler(
             match.date
         );
 
-      /*
-       * Baseline.
-       */
       const baseline =
         baselineModel(
           match.homeTeam,
@@ -1469,14 +1621,6 @@ export default async function handler(
           match.date
         );
 
-      /*
-       * Modello xG.
-       *
-       * L'xG della partita target NON
-       * viene usato per costruire la previsione.
-       * Serve esclusivamente come dato
-       * storico post-partita.
-       */
       const xG =
         xGModel(
           match.homeTeam,
@@ -1549,6 +1693,7 @@ export default async function handler(
               Number(
                 baseline.home.toFixed(3)
               ),
+
             away:
               Number(
                 baseline.away.toFixed(3)
@@ -1582,6 +1727,7 @@ export default async function handler(
               Number(
                 xG.home.toFixed(3)
               ),
+
             away:
               Number(
                 xG.away.toFixed(3)
@@ -1614,14 +1760,6 @@ export default async function handler(
         xGMetrics
       );
 
-    /*
-     * Per Brier e LogLoss:
-     * valori più bassi = meglio.
-     *
-     * Quindi:
-     * negativo = xG migliore
-     * positivo = baseline migliore
-     */
     const improvement = {
       accuracy:
         baselineFinal.accuracy !== null &&
@@ -1658,9 +1796,9 @@ export default async function handler(
     };
 
     /*
-     * ==========================================
+     * =====================================================
      * 4. RISPOSTA
-     * ==========================================
+     * =====================================================
      */
 
     return res.status(200).json({
@@ -1668,8 +1806,12 @@ export default async function handler(
 
       period: {
         year: YEAR,
-        from: "2025-01-01",
-        to: "2025-12-31"
+
+        from:
+          "2025-01-01",
+
+        to:
+          "2025-12-31"
       },
 
       model: {
@@ -1680,15 +1822,18 @@ export default async function handler(
           "Baseline + rolling xG storico pre-partita",
 
         leakageProtection:
-          "Solo dati precedenti alla partita target"
+          "Solo informazioni disponibili prima della partita target"
       },
 
       dataset: {
         rawRows:
           rawRows.length,
 
-        storedMatches2025:
+        storedMatches:
           allMatches.length,
+
+        matches2025:
+          matches2025.length,
 
         candidateMatches:
           candidates.length,
@@ -1718,53 +1863,69 @@ export default async function handler(
       results,
 
       diagnostics: {
+        storedEndpoint:
+          "/v1/stored/matches",
+
+        statsEndpoint:
+          "/v1/stored/matches/:id/stats",
+
+        requests:
+          1 + statsRequests,
+
+        maxXGRequests:
+          MAX_XG_REQUESTS,
+
+        maxTestMatches:
+          MAX_TEST_MATCHES,
+
         statsUnavailable,
+
         statsErrors,
 
         rateLimited,
 
         retryAfter,
 
-        maxCandidateMatches:
-          MAX_CANDIDATE_MATCHES,
+        cooldown,
 
-        maxTestMatches:
-          MAX_TEST_MATCHES,
-
-        maxStatsRequests:
-          MAX_STATS_REQUESTS,
-
-        statsEndpoint:
-          "/v1/stored/matches/:id/stats",
-
-        monthDiagnostics,
+        pagination:
+          stored.pagination,
 
         note:
           rateLimited
-            ? "BBD ha restituito 429. Il backtest si è fermato immediatamente per proteggere la quota. Rispettare Retry-After prima di una nuova esecuzione."
-            : "Versione v2: massimo 10 richieste stats per esecuzione, nessun retry automatico su 429."
+            ? "BBD ha restituito 429. Il test si è fermato immediatamente."
+            : "Backtest v3: una sola richiesta per il dataset e massimo 5 richieste stats/xG."
       },
 
       statsDiagnostics
     });
   } catch (error) {
     console.error(
-      "BACKTEST V2 ERROR:",
+      "BACKTEST V3 ERROR:",
       error
     );
 
     return res.status(500).json({
       ok: false,
-      error: "BACKTEST_ERROR",
+
+      error:
+        "BACKTEST_ERROR",
+
       message:
         error?.message ||
         "Errore durante il backtest.",
 
       status:
-        error?.status || null,
+        error?.status ||
+        null,
 
       retryAfter:
-        error?.retryAfter || 0
+        error?.retryAfter ||
+        0,
+
+      cooldown:
+        error?.cooldown ||
+        0
     });
   }
 }
