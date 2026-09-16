@@ -1,7 +1,6 @@
 {
   "buildCommand": "npm install",
   "outputDirectory": ".",
-  "framework": "static",
   "functions": {
     "api/**/*.ts": {
       "runtime": "nodejs20.x"
