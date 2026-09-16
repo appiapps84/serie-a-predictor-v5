@@ -80,6 +80,19 @@
     .error {
       color: #dc2626;
       padding: 2rem;
+      background: #fee2e2;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .debug {
+      background: #f3f4f6;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      font-family: monospace;
+      margin-top: 1rem;
+      white-space: pre-wrap;
+      word-break: break-all;
     }
   </style>
 </head>
@@ -94,11 +107,40 @@
   <script>
     async function loadStats() {
       try {
+        console.log('Fetching /api/calibrate...');
+        
         const res = await fetch('/api/calibrate', { method: 'POST' });
-        const data = await res.json();
+        
+        console.log('Response status:', res.status);
+        console.log('Response headers:', res.headers);
+        
+        const text = await res.text();
+        console.log('Response text:', text);
+        
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          document.getElementById('content').innerHTML = `
+            <div class="error">
+              ❌ Invalid JSON response from /api/calibrate
+            </div>
+            <div class="debug">Status: ${res.status}
+
+Response:
+${text.substring(0, 500)}
+            </div>
+          `;
+          return;
+        }
 
         if (!data.stats) {
-          document.getElementById('content').innerHTML = '<p>No data yet</p>';
+          document.getElementById('content').innerHTML = `
+            <div class="error">
+              ⚠️ No data yet. Make sure predictions exist in the database.
+            </div>
+            <div class="debug">${JSON.stringify(data, null, 2)}</div>
+          `;
           return;
         }
 
@@ -152,7 +194,13 @@
           </div>
         `;
       } catch (error) {
-        document.getElementById('content').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+        console.error('Error:', error);
+        document.getElementById('content').innerHTML = `
+          <div class="error">
+            ❌ Error: ${error.message}
+          </div>
+          <div class="debug">${error.stack}</div>
+        `;
       }
     }
 
