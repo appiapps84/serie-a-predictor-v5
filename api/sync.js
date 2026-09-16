@@ -1,717 +1,550 @@
-const BBS_BASE =
-  "https://api.bigballsdata.com";
+const BBS_BASE = "https://api.bigballsdata.com";
+const LEAGUE = "serie-a";
+const SPORT = "football";
+const TIMEOUT = 10000;
 
-const LEAGUE =
-  "serie-a";
-
-const SPORT =
-  "football";
-
-const TIMEOUT =
-  10000;
-
-function send(res, status, body) {
-  res.status(status);
-  res.setHeader(
-    "Content-Type",
-    "application/json"
-  );
-  return res.json(body);
-}
-
-function first(...values) {
-  return values.find(
-    v =>
-      v !== undefined &&
-      v !== null &&
-      v !== ""
-  );
-}
-
-function number(value) {
-
-  if (
-    value === undefined ||
-    value === null ||
-    value === ""
-  ) {
-    return null;
-  }
-
-  const n = Number(value);
-
-  return Number.isFinite(n)
-    ? n
-    : null;
-}
-
-function teamName(team) {
-
-  if (!team) return null;
-
-  if (typeof team === "string") {
-    return team;
-  }
-
-  return first(
-    team.name,
-    team.display_name,
-    team.short_name,
-    team.common_name
-  );
-}
-
-function teamId(team) {
-
-  if (!team || typeof team !== "object") {
-    return null;
-  }
-
-  return first(
-    team.id,
-    team.team_id
-  );
-}
-
-function normalizeName(name) {
-
-  return String(name || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(
-      /[\u0300-\u036f]/g,
-      ""
-    )
-    .replace(/\s+/g, " ")
-    .trim();
-
-}
+// Numero massimo di partite per cui proviamo a recuperare
+// stats e lineups. Evita di fare troppe chiamate API.
+const MAX_DETAIL_MATCHES = 20;
 
 async function bbsFetch(path, key) {
-
-  const controller =
-    new AbortController();
-
-  const timer =
-    setTimeout(
-      () => controller.abort(),
-      TIMEOUT
-    );
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT);
 
   try {
+    const response = await fetch(`${BBS_BASE}${path}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "X-API-Key": key,
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
 
-    const response =
-      await fetch(
-        `${BBS_BASE}${path}`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${key}`,
+    const text = await response.text();
 
-            "X-API-Key":
-              key,
-
-            Accept:
-              "application/json"
-          },
-
-          signal:
-            controller.signal
-        }
-      );
-
-    const text =
-      await response.text();
-
-    let data;
+    let data = null;
 
     try {
-      data =
-        text
-          ? JSON.parse(text)
-          : null;
+      data = text ? JSON.parse(text) : null;
     } catch {
-      data = {
-        raw: text
-      };
+      data = text;
     }
 
     if (!response.ok) {
+      const error = new Error(
+        `BBS ${response.status} ${response.statusText}`
+      );
 
-      const error =
-        new Error(
-          `BBD HTTP ${response.status}`
-        );
-
-      error.status =
-        response.status;
-
+      error.status = response.status;
       error.body =
-        data;
+        typeof data === "string"
+          ? data.slice(0, 500)
+          : JSON.stringify(data).slice(0, 1000);
 
       throw error;
     }
 
     return data;
-
   } finally {
-
-    clearTimeout(timer);
-
+    clearTimeout(timeout);
   }
-
 }
 
-function arrayFrom(data) {
+function arrayFrom(value) {
+  if (Array.isArray(value)) return value;
 
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data?.data)) {
-    return data.data;
-  }
-
-  if (Array.isArray(data?.matches)) {
-    return data.matches;
-  }
-
-  if (Array.isArray(data?.results)) {
-    return data.results;
-  }
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.matches)) return value.matches;
+  if (Array.isArray(value?.results)) return value.results;
+  if (Array.isArray(value?.standings)) return value.standings;
 
   return [];
-
 }
 
-function normalizeMatch(match) {
+function firstDefined(...values) {
+  return values.find(
+    (value) => value !== undefined && value !== null && value !== ""
+  );
+}
 
-  const home =
-    match.home ||
-    match.home_team ||
-    match.homeTeam ||
-    match.teams?.home;
+function normalizeMatch(raw) {
+  const homeTeam = firstDefined(
+    raw.homeTeam,
+    raw.home_team,
+    raw.home?.name,
+    raw.teams?.home?.name,
+    raw.home
+  );
 
-  const away =
-    match.away ||
-    match.away_team ||
-    match.awayTeam ||
-    match.teams?.away;
+  const awayTeam = firstDefined(
+    raw.awayTeam,
+    raw.away_team,
+    raw.away?.name,
+    raw.teams?.away?.name,
+    raw.away
+  );
+
+  const id = firstDefined(
+    raw.id,
+    raw.matchId,
+    raw.match_id,
+    raw.fixtureId,
+    raw.fixture_id
+  );
+
+  const kickoff = firstDefined(
+    raw.kickoff,
+    raw.kickoffTime,
+    raw.kickoff_time,
+    raw.startTime,
+    raw.start_time,
+    raw.date,
+    raw.matchDate,
+    raw.match_date,
+    raw.utcDate,
+    raw.utc_date
+  );
+
+  const status = firstDefined(
+    raw.status,
+    raw.matchStatus,
+    raw.match_status,
+    raw.fixture?.status?.short,
+    raw.fixture?.status?.long
+  );
+
+  const matchday = firstDefined(
+    raw.matchday,
+    raw.matchDay,
+    raw.match_day,
+    raw.round,
+    raw.week
+  );
+
+  const homeScore = firstDefined(
+    raw.homeScore,
+    raw.home_score,
+    raw.score?.home,
+    raw.scores?.home,
+    raw.result?.home
+  );
+
+  const awayScore = firstDefined(
+    raw.awayScore,
+    raw.away_score,
+    raw.score?.away,
+    raw.scores?.away,
+    raw.result?.away
+  );
 
   return {
-
-    id:
-      first(
-        match.id,
-        match.match_id
-      ),
-
-    homeTeam:
-      teamName(home),
-
-    awayTeam:
-      teamName(away),
-
-    homeTeamId:
-      teamId(home),
-
-    awayTeamId:
-      teamId(away),
-
-    homeTeamKey:
-      normalizeName(
-        teamName(home)
-      ),
-
-    awayTeamKey:
-      normalizeName(
-        teamName(away)
-      ),
-
-    kickoff:
-      first(
-        match.kickoff,
-        match.start_time,
-        match.startTime,
-        match.date,
-        match.utc_date
-      ),
-
-    status:
-      first(
-        match.status,
-        match.match_status,
-        match.state
-      ),
-
-    matchday:
-      first(
-        match.matchday,
-        match.round,
-        match.week
-      ),
-
-    homeScore:
-      number(
-        first(
-          match.home_score,
-          match.homeScore,
-          match.scores?.home,
-          match.score?.home
-        )
-      ),
-
-    awayScore:
-      number(
-        first(
-          match.away_score,
-          match.awayScore,
-          match.scores?.away,
-          match.score?.away
-        )
-      )
-
+    id: id ?? null,
+    homeTeam: homeTeam ?? null,
+    awayTeam: awayTeam ?? null,
+    kickoff: kickoff ?? null,
+    status: status ?? "scheduled",
+    matchday: matchday ?? null,
+    homeScore: homeScore ?? null,
+    awayScore: awayScore ?? null,
+    xG: null,
+    lineups: null,
   };
-
 }
 
-function extractXG(data) {
+function extractXG(value) {
+  if (!value || typeof value !== "object") return null;
 
-  const root =
-    data?.data ||
-    data?.stats ||
-    data;
+  const candidates = [
+    value.xG,
+    value.xg,
+    value.expectedGoals,
+    value.expected_goals,
+    value.expectedGoalsHome,
+    value.expected_goals_home,
+  ];
 
-  if (!root) {
+  // Caso classico:
+  // { xG: { home: 1.4, away: 0.8 } }
+  if (value.xG && typeof value.xG === "object") {
+    const home = firstDefined(
+      value.xG.home,
+      value.xG.homeXG,
+      value.xG.home_xg,
+      value.xG.homeExpectedGoals
+    );
 
-    return {
-      homeXG: null,
-      awayXG: null
-    };
+    const away = firstDefined(
+      value.xG.away,
+      value.xG.awayXG,
+      value.xG.away_xg,
+      value.xG.awayExpectedGoals
+    );
 
+    if (home != null && away != null) {
+      return {
+        homeXG: Number(home),
+        awayXG: Number(away),
+      };
+    }
   }
 
-  const home =
-    root.home ||
-    root.home_team ||
-    root.homeTeam ||
-    root.teams?.home ||
-    {};
+  // Caso:
+  // { expectedGoals: { home: ..., away: ... } }
+  if (
+    value.expectedGoals &&
+    typeof value.expectedGoals === "object"
+  ) {
+    const home = firstDefined(
+      value.expectedGoals.home,
+      value.expectedGoals.homeXG,
+      value.expectedGoals.home_xg
+    );
 
-  const away =
-    root.away ||
-    root.away_team ||
-    root.awayTeam ||
-    root.teams?.away ||
-    {};
+    const away = firstDefined(
+      value.expectedGoals.away,
+      value.expectedGoals.awayXG,
+      value.expectedGoals.away_xg
+    );
 
-  return {
-
-    homeXG:
-      number(
-        first(
-          home.xg,
-          home.XG,
-          home.expected_goals,
-          root.home_xg,
-          root.homeXG,
-          root.xg_home
-        )
-      ),
-
-    awayXG:
-      number(
-        first(
-          away.xg,
-          away.XG,
-          away.expected_goals,
-          root.away_xg,
-          root.awayXG,
-          root.xg_away
-        )
-      )
-
-  };
-
-}
-
-function normalizeLineups(data) {
-
-  const root =
-    data?.data ||
-    data;
-
-  if (!root) {
-
-    return {
-      home: [],
-      away: [],
-      available: false
-    };
-
+    if (home != null && away != null) {
+      return {
+        homeXG: Number(home),
+        awayXG: Number(away),
+      };
+    }
   }
 
-  const home =
-    root.home ||
-    root.home_team ||
-    root.homeTeam ||
-    root.lineups?.home ||
-    [];
+  // Caso root:
+  // { homeXG: 1.4, awayXG: 0.8 }
+  const homeRoot = firstDefined(
+    value.homeXG,
+    value.home_xg,
+    value.homeExpectedGoals,
+    value.home_expected_goals
+  );
 
-  const away =
-    root.away ||
-    root.away_team ||
-    root.awayTeam ||
-    root.lineups?.away ||
-    [];
+  const awayRoot = firstDefined(
+    value.awayXG,
+    value.away_xg,
+    value.awayExpectedGoals,
+    value.away_expected_goals
+  );
 
+  if (homeRoot != null && awayRoot != null) {
+    return {
+      homeXG: Number(homeRoot),
+      awayXG: Number(awayRoot),
+    };
+  }
+
+  // Caso data wrapper
+  if (value.data && typeof value.data === "object") {
+    return extractXG(value.data);
+  }
+
+  // Caso results/matches
+  if (Array.isArray(value.results) && value.results.length) {
+    return extractXG(value.results[0]);
+  }
+
+  if (Array.isArray(value.matches) && value.matches.length) {
+    return extractXG(value.matches[0]);
+  }
+
+  // Evitiamo di usare candidati inutilizzati, ma lasciamo
+  // la funzione compatibile con possibili formati BBS.
+  void candidates;
+
+  return null;
+}
+
+function normalizeLineups(value) {
+  if (!value) return null;
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (Array.isArray(value.lineups)) {
+    return value.lineups;
+  }
+
+  if (Array.isArray(value.data)) {
+    return value.data;
+  }
+
+  if (Array.isArray(value.results)) {
+    return value.results;
+  }
+
+  if (value.data && typeof value.data === "object") {
+    return normalizeLineups(value.data);
+  }
+
+  return null;
+}
+
+function formatError(error) {
   return {
-
-    home:
-      Array.isArray(home)
-        ? home
-        : [],
-
-    away:
-      Array.isArray(away)
-        ? away
-        : [],
-
-    available:
-      Array.isArray(home) &&
-      Array.isArray(away)
-
+    message: error?.message || "Unknown error",
+    status: error?.status || null,
+    body: error?.body || null,
   };
-
 }
 
 async function getDetails(matches, key) {
-
   /*
-    Limitiamo le richieste dettagliate alle partite
-    recenti/prossime. Questo protegge il free tier BBD.
-  */
+   * IMPORTANTE:
+   * Prima filtravamo obbligatoriamente per kickoff.
+   * Il feed /v1/matches che stai ricevendo non sta restituendo
+   * kickoff, quindi il filtro produceva 0 partite.
+   *
+   * Ora usiamo semplicemente le prime MAX_DETAIL_MATCHES
+   * partite con un ID valido.
+   */
 
-  const now =
-    Date.now();
+  const candidates = matches
+    .filter((match) => match?.id)
+    .slice(0, MAX_DETAIL_MATCHES);
 
-  const candidates =
-    matches.filter(match => {
+  const enriched = [];
 
-      if (!match.kickoff) {
-        return false;
-      }
-
-      const time =
-        new Date(
-          match.kickoff
-        ).getTime();
-
-      if (!Number.isFinite(time)) {
-        return false;
-      }
-
-      const hours =
-        (
-          now - time
-        ) / 3600000;
-
-      return (
-        hours >= -48 &&
-        hours <= 72
-      );
-
-    });
-
-  const limited =
-    candidates.slice(0, 50);
-
-  const results = [];
-
-  for (
-    const match of limited
-  ) {
-
-    let xG = {
-      homeXG: null,
-      awayXG: null
+  for (const match of candidates) {
+    const result = {
+      ...match,
+      xG: null,
+      lineups: null,
+      detailErrors: [],
     };
 
-    let lineups = {
-      home: [],
-      away: [],
-      available: false
-    };
-
+    // -------------------------
+    // STATS
+    // -------------------------
     try {
-
-      const stats =
-        await bbsFetch(
-          `/v1/stored/matches/${encodeURIComponent(match.id)}/stats`,
-          key
-        );
-
-      xG =
-        extractXG(stats);
-
-    } catch (error) {
-
-      console.warn(
-        "Stats:",
-        match.id,
-        error.message
+      const stats = await bbsFetch(
+        `/v1/stored/matches/${encodeURIComponent(match.id)}/stats`,
+        key
       );
 
-    }
+      const xG = extractXG(stats);
 
-    try {
-
-      const lineup =
-        await bbsFetch(
-          `/v1/stored/matches/${encodeURIComponent(match.id)}/lineups`,
-          key
-        );
-
-      lineups =
-        normalizeLineups(
-          lineup
-        );
-
+      if (xG) {
+        result.xG = xG;
+      }
     } catch (error) {
-
       console.warn(
-        "Lineup:",
+        "BBS stats error",
         match.id,
-        error.message
+        formatError(error)
       );
 
+      result.detailErrors.push({
+        type: "stats",
+        ...formatError(error),
+      });
     }
 
-    results.push({
+    // -------------------------
+    // LINEUPS
+    // -------------------------
+    try {
+      const lineups = await bbsFetch(
+        `/v1/stored/matches/${encodeURIComponent(match.id)}/lineups`,
+        key
+      );
 
-      id:
-        String(match.id),
+      result.lineups = normalizeLineups(lineups);
+    } catch (error) {
+      console.warn(
+        "BBS lineups error",
+        match.id,
+        formatError(error)
+      );
 
-      xG,
+      result.detailErrors.push({
+        type: "lineups",
+        ...formatError(error),
+      });
+    }
 
-      lineups
-
-    });
-
+    enriched.push(result);
   }
 
-  return results;
-
+  return enriched;
 }
 
-export default async function handler(
-  req,
-  res
-) {
+export default async function handler(req, res) {
+  // CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
 
   if (req.method !== "GET") {
-
-    return send(
-      res,
-      405,
-      {
-        ok: false,
-        error:
-          "METHOD_NOT_ALLOWED"
-      }
-    );
-
+    return res.status(405).json({
+      ok: false,
+      error: "METHOD_NOT_ALLOWED",
+    });
   }
 
-  const key =
-    process.env.BBS_API_KEY;
+  const key = process.env.BBS_API_KEY;
 
   if (!key) {
-
-    return send(
-      res,
-      500,
-      {
-        ok: false,
-
-        error:
-          "BBS_API_KEY_MISSING",
-
-        message:
-          "Aggiungi BBS_API_KEY nelle Environment Variables di Vercel."
-      }
-    );
-
+    return res.status(500).json({
+      ok: false,
+      error: "BBS_API_KEY_MISSING",
+      message:
+        "Vercel non trova la variabile BBS_API_KEY.",
+    });
   }
 
   try {
+    // -------------------------
+    // MATCHES
+    // -------------------------
+    const matchesResponse = await bbsFetch(
+      `/v1/matches?sport=${encodeURIComponent(
+        SPORT
+      )}&league=${encodeURIComponent(LEAGUE)}`,
+      key
+    );
 
-    const matchesResponse =
-      await bbsFetch(
-        `/v1/matches?sport=${SPORT}&league=${LEAGUE}`,
-        key
+    const rawMatches = arrayFrom(matchesResponse);
+
+    const matches = rawMatches
+      .map(normalizeMatch)
+      .filter(
+        (match) =>
+          match.homeTeam &&
+          match.awayTeam
       );
 
-    const rawMatches =
-      arrayFrom(
-        matchesResponse
-      );
-
-    const matches =
-      rawMatches
-        .map(normalizeMatch)
-        .filter(
-          m =>
-            m.id &&
-            m.homeTeam &&
-            m.awayTeam
-        );
-
+    // -------------------------
+    // STANDINGS
+    // -------------------------
     let standings = [];
+    let standingsError = null;
 
     try {
-
-      const standingsResponse =
-        await bbsFetch(
-          `/v1/standings?sport=${SPORT}&league=${LEAGUE}`,
-          key
-        );
-
-      standings =
-        arrayFrom(
-          standingsResponse
-        );
-
-    } catch (error) {
-
-      console.warn(
-        "Standings non disponibili:",
-        error.message
-      );
-
-    }
-
-    const details =
-      await getDetails(
-        matches,
+      const standingsResponse = await bbsFetch(
+        `/v1/standings?sport=${encodeURIComponent(
+          SPORT
+        )}&league=${encodeURIComponent(LEAGUE)}`,
         key
       );
 
-    const detailMap =
-      new Map();
+      standings = arrayFrom(standingsResponse);
+    } catch (error) {
+      standingsError = formatError(error);
 
-    details.forEach(detail => {
-
-      detailMap.set(
-        String(detail.id),
-        detail
+      console.warn(
+        "BBS standings error",
+        standingsError
       );
+    }
 
-    });
+    // -------------------------
+    // DETAILS
+    // -------------------------
+    const details = await getDetails(
+      matches,
+      key
+    );
 
-    const enriched =
-      matches.map(match => {
+    const detailsById = new Map(
+      details.map((match) => [
+        String(match.id),
+        match,
+      ])
+    );
 
-        const detail =
-          detailMap.get(
-            String(match.id)
-          );
+    const enrichedMatches = matches.map(
+      (match) => {
+        const detail = detailsById.get(
+          String(match.id)
+        );
+
+        if (!detail) {
+          return match;
+        }
 
         return {
-
           ...match,
-
-          xG:
-            detail?.xG || {
-              homeXG: null,
-              awayXG: null
-            },
-
-          lineups:
-            detail?.lineups || {
-              home: [],
-              away: [],
-              available: false
-            }
-
+          xG: detail.xG,
+          lineups: detail.lineups,
+          detailErrors:
+            detail.detailErrors || [],
         };
-
-      });
-
-    const xgCount =
-      enriched.filter(
-        match =>
-          match.xG.homeXG !== null &&
-          match.xG.awayXG !== null
-      ).length;
-
-    const lineupCount =
-      enriched.filter(
-        match =>
-          match.lineups.available
-      ).length;
-
-    return send(
-      res,
-      200,
-      {
-
-        ok: true,
-
-        source:
-          "Big Balls Sports Data",
-
-        league:
-          "serie-a",
-
-        generatedAt:
-          new Date().toISOString(),
-
-        coverage: {
-
-          matches:
-            enriched.length,
-
-          xG:
-            xgCount,
-
-          lineups:
-            lineupCount
-
-        },
-
-        matches:
-          enriched,
-
-        standings
-
       }
     );
 
+    // -------------------------
+    // COVERAGE
+    // -------------------------
+    const xGCount = enrichedMatches.filter(
+      (match) =>
+        match.xG &&
+        Number.isFinite(
+          Number(match.xG.homeXG)
+        ) &&
+        Number.isFinite(
+          Number(match.xG.awayXG)
+        )
+    ).length;
+
+    const lineupCount = enrichedMatches.filter(
+      (match) =>
+        Array.isArray(match.lineups) &&
+        match.lineups.length > 0
+    ).length;
+
+    return res.status(200).json({
+      ok: true,
+      source: "Big Balls Sports Data",
+      league: LEAGUE,
+      generatedAt: new Date().toISOString(),
+
+      coverage: {
+        matches: enrichedMatches.length,
+        detailsAttempted: details.length,
+        xG: xGCount,
+        lineups: lineupCount,
+      },
+
+      diagnostics: {
+        apiKeyDetected: true,
+        standingsAvailable: standings.length > 0,
+        standingsError,
+        detailErrors: details
+          .filter(
+            (match) =>
+              Array.isArray(
+                match.detailErrors
+              ) &&
+              match.detailErrors.length > 0
+          )
+          .slice(0, 10)
+          .map((match) => ({
+            id: match.id,
+            homeTeam: match.homeTeam,
+            awayTeam: match.awayTeam,
+            errors: match.detailErrors,
+          })),
+      },
+
+      matches: enrichedMatches,
+      standings,
+    });
   } catch (error) {
-
     console.error(
-      "BBD SYNC ERROR",
-      error
+      "BBS sync fatal error:",
+      formatError(error)
     );
 
-    return send(
-      res,
-      error.status || 500,
-      {
-
-        ok: false,
-
-        error:
-          "SYNC_FAILED",
-
-        message:
-          error.message ||
-          "Errore BBD."
-
-      }
-    );
-
+    return res.status(500).json({
+      ok: false,
+      error: "BBS_SYNC_FAILED",
+      details: formatError(error),
+    });
   }
-
 }
