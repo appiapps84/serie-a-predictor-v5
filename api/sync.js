@@ -4,21 +4,12 @@ const API_KEY = process.env.BBS_API_KEY;
 const SPORT = "football";
 const LEAGUE = "seriea";
 
-/*
- * Limiti volutamente bassi:
- *
- * 1 richiesta matches
- * 1 richiesta standings
- * max 8 richieste stats/xG
- * max 6 richieste lineups
- *
- * Totale massimo: 16 richieste per sync.
- */
 const MATCH_TIMEOUT = 8000;
 const OPTIONAL_TIMEOUT = 6000;
 
 const MAX_STATS_REQUESTS = 8;
 const MAX_LINEUP_REQUESTS = 6;
+const STORED_MATCHES_LIMIT = 100;
 
 
 /* =========================================================
@@ -76,7 +67,6 @@ async function fetchBBS(path, timeoutMs = OPTIONAL_TIMEOUT) {
   } catch (error) {
 
     if (error?.name === "AbortError") {
-
       return {
         ok: false,
         status: 504,
@@ -94,7 +84,6 @@ async function fetchBBS(path, timeoutMs = OPTIONAL_TIMEOUT) {
     };
 
   } finally {
-
     clearTimeout(timer);
   }
 }
@@ -164,97 +153,34 @@ function getMatchId(match) {
 
 
 /* =========================================================
-   MATCH STATUS
+   TEAM NAME
 ========================================================= */
 
-function getMatchStatus(match) {
+function getTeamName(team) {
 
-  if (!match || typeof match !== "object") {
+  if (!team) {
     return "";
   }
 
-  return String(
-    match.status ??
-    match.state ??
-    match.match_status ??
+  if (typeof team === "string") {
+    return team;
+  }
+
+  return (
+    team.name ??
+    team.team_name ??
+    team.short_name ??
+    team.display_name ??
     ""
-  ).toLowerCase();
+  );
 }
 
 
 /* =========================================================
-   PARTITA TERMINATA?
+   NUMBER
 ========================================================= */
 
-function isCompletedMatch(match) {
-
-  const status =
-    getMatchStatus(match);
-
-  /*
-   * BBD può usare diversi stati.
-   */
-
-  const completedStatuses = [
-    "finished",
-    "ft",
-    "full_time",
-    "completed",
-    "complete",
-    "ended",
-    "final"
-  ];
-
-  if (
-    completedStatuses.some(
-      value => status.includes(value)
-    )
-  ) {
-    return true;
-  }
-
-  /*
-   * Alcuni feed usano semplicemente un
-   * punteggio finale.
-   */
-
-  const score =
-    match?.score ??
-    match?.scores ??
-    match?.result ??
-    null;
-
-  if (score && typeof score === "object") {
-
-    const home =
-      score.home ??
-      score.home_score ??
-      score.homeScore;
-
-    const away =
-      score.away ??
-      score.away_score ??
-      score.awayScore;
-
-    if (
-      home !== undefined &&
-      away !== undefined &&
-      home !== null &&
-      away !== null
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-
-/* =========================================================
-   NUMERO SICURO
-========================================================= */
-
-function numberOrNull(value) {
+function toNumber(value) {
 
   if (
     value === null ||
@@ -264,141 +190,16 @@ function numberOrNull(value) {
     return null;
   }
 
-  const number =
-    Number(value);
+  const number = Number(value);
 
-  if (!Number.isFinite(number)) {
-    return null;
-  }
-
-  return number;
+  return Number.isFinite(number)
+    ? number
+    : null;
 }
 
 
 /* =========================================================
-   ESTRAZIONE XG
-========================================================= */
-
-function findXGInObject(obj) {
-
-  if (!obj || typeof obj !== "object") {
-    return null;
-  }
-
-  /*
-   * Formati possibili:
-   *
-   * home_xg / away_xg
-   * homeXG / awayXG
-   * xg_home / xg_away
-   * expected_goals_home / expected_goals_away
-   */
-
-  const homeCandidates = [
-    obj.home_xg,
-    obj.homeXG,
-    obj.home_xG,
-    obj.xg_home,
-    obj.xG_home,
-    obj.expected_goals_home,
-    obj.expectedGoalsHome,
-    obj.home_expected_goals,
-    obj.homeExpectedGoals
-  ];
-
-  const awayCandidates = [
-    obj.away_xg,
-    obj.awayXG,
-    obj.away_xG,
-    obj.xg_away,
-    obj.xG_away,
-    obj.expected_goals_away,
-    obj.expectedGoalsAway,
-    obj.away_expected_goals,
-    obj.awayExpectedGoals
-  ];
-
-  let home = null;
-  let away = null;
-
-  for (const value of homeCandidates) {
-
-    const number =
-      numberOrNull(value);
-
-    if (
-      number !== null &&
-      number >= 0 &&
-      number <= 15
-    ) {
-      home = number;
-      break;
-    }
-  }
-
-  for (const value of awayCandidates) {
-
-    const number =
-      numberOrNull(value);
-
-    if (
-      number !== null &&
-      number >= 0 &&
-      number <= 15
-    ) {
-      away = number;
-      break;
-    }
-  }
-
-  if (
-    home !== null &&
-    away !== null
-  ) {
-
-    return {
-      homeXG: home,
-      awayXG: away
-    };
-  }
-
-  /*
-   * Possibile oggetto annidato xG:
-   */
-
-  const nestedCandidates = [
-    obj.xG,
-    obj.xg,
-    obj.expected_goals,
-    obj.expectedGoals,
-    obj.stats,
-    obj.statistics,
-    obj.match_stats,
-    obj.matchStats
-  ];
-
-  for (const nested of nestedCandidates) {
-
-    if (
-      nested &&
-      typeof nested === "object"
-    ) {
-
-      const result =
-        findXGInObject(nested);
-
-      if (result) {
-        return result;
-      }
-    }
-  }
-
-  return null;
-}
-
-
-/* =========================================================
-   XG DA RISPOSTA STATS
+   XG EXTRACTION
 ========================================================= */
 
 function extractXG(data) {
@@ -408,62 +209,281 @@ function extractXG(data) {
   }
 
   /*
-   * Prova direttamente.
+   * Funzione ricorsiva controllata.
+   *
+   * Cerchiamo:
+   * xg
+   * xG
+   * expected_goals
+   * expectedGoals
+   * home_xg / away_xg
+   * homeXG / awayXG
    */
 
-  const direct =
-    findXGInObject(data);
+  function search(obj) {
 
-  if (direct) {
-    return direct;
-  }
+    if (
+      !obj ||
+      typeof obj !== "object"
+    ) {
+      return null;
+    }
 
-  /*
-   * Prova array.
-   */
+    /*
+     * CASO 1:
+     * home / away come oggetti.
+     *
+     * Esempio:
+     *
+     * home: {
+     *   xg: 1.42
+     * }
+     *
+     * away: {
+     *   xg: 0.83
+     * }
+     */
 
-  const arrays = [
-    data.stats,
-    data.statistics,
-    data.data,
-    data.match,
-    data.fixture
-  ];
+    const homeObject =
+      obj.home ??
+      obj.home_team ??
+      obj.homeTeam ??
+      null;
 
-  for (const item of arrays) {
+    const awayObject =
+      obj.away ??
+      obj.away_team ??
+      obj.awayTeam ??
+      null;
 
-    if (Array.isArray(item)) {
+    if (
+      homeObject &&
+      awayObject &&
+      typeof homeObject === "object" &&
+      typeof awayObject === "object"
+    ) {
 
-      for (const row of item) {
+      const homeXG =
+        toNumber(
+          homeObject.xg ??
+          homeObject.xG ??
+          homeObject.expected_goals ??
+          homeObject.expectedGoals
+        );
+
+      const awayXG =
+        toNumber(
+          awayObject.xg ??
+          awayObject.xG ??
+          awayObject.expected_goals ??
+          awayObject.expectedGoals
+        );
+
+      if (
+        homeXG !== null &&
+        awayXG !== null &&
+        homeXG >= 0 &&
+        awayXG >= 0
+      ) {
+
+        return {
+          homeXG,
+          awayXG
+        };
+      }
+    }
+
+
+    /*
+     * CASO 2:
+     * campi piatti.
+     */
+
+    const homeXGCandidates = [
+      obj.home_xg,
+      obj.homeXG,
+      obj.home_xG,
+      obj.xg_home,
+      obj.xG_home,
+      obj.expected_goals_home,
+      obj.expectedGoalsHome
+    ];
+
+    const awayXGCandidates = [
+      obj.away_xg,
+      obj.awayXG,
+      obj.away_xG,
+      obj.xg_away,
+      obj.xG_away,
+      obj.expected_goals_away,
+      obj.expectedGoalsAway
+    ];
+
+    let homeXG = null;
+    let awayXG = null;
+
+    for (const value of homeXGCandidates) {
+
+      const n = toNumber(value);
+
+      if (
+        n !== null &&
+        n >= 0 &&
+        n <= 15
+      ) {
+        homeXG = n;
+        break;
+      }
+    }
+
+    for (const value of awayXGCandidates) {
+
+      const n = toNumber(value);
+
+      if (
+        n !== null &&
+        n >= 0 &&
+        n <= 15
+      ) {
+        awayXG = n;
+        break;
+      }
+    }
+
+    if (
+      homeXG !== null &&
+      awayXG !== null
+    ) {
+
+      return {
+        homeXG,
+        awayXG
+      };
+    }
+
+
+    /*
+     * CASO 3:
+     * oggetto xg:
+     *
+     * xg: {
+     *   home: 1.4,
+     *   away: 0.8
+     * }
+     */
+
+    const xgObject =
+      obj.xg ??
+      obj.xG ??
+      obj.expected_goals ??
+      obj.expectedGoals ??
+      null;
+
+    if (
+      xgObject &&
+      typeof xgObject === "object"
+    ) {
+
+      const home =
+        toNumber(
+          xgObject.home ??
+          xgObject.home_xg ??
+          xgObject.homeXG
+        );
+
+      const away =
+        toNumber(
+          xgObject.away ??
+          xgObject.away_xg ??
+          xgObject.awayXG
+        );
+
+      if (
+        home !== null &&
+        away !== null &&
+        home >= 0 &&
+        away >= 0
+      ) {
+
+        return {
+          homeXG: home,
+          awayXG: away
+        };
+      }
+    }
+
+
+    /*
+     * CASO 4:
+     * array data/stats/statistics.
+     */
+
+    for (const key of [
+      "data",
+      "stats",
+      "statistics",
+      "match_stats",
+      "matchStats",
+      "teams"
+    ]) {
+
+      const child = obj[key];
+
+      if (Array.isArray(child)) {
+
+        for (const item of child) {
+
+          const result =
+            search(item);
+
+          if (result) {
+            return result;
+          }
+        }
+
+      } else if (
+        child &&
+        typeof child === "object"
+      ) {
 
         const result =
-          findXGInObject(row);
+          search(child);
 
         if (result) {
           return result;
         }
       }
-
-    } else if (
-      item &&
-      typeof item === "object"
-    ) {
-
-      const result =
-        findXGInObject(item);
-
-      if (result) {
-        return result;
-      }
     }
+
+    return null;
   }
 
-  return null;
+  return search(data);
 }
 
 
 /* =========================================================
-   STATS ENDPOINT
+   STORED MATCHES
+========================================================= */
+
+async function fetchStoredMatches() {
+
+  /*
+   * QUI prendiamo lo storico.
+   *
+   * È fondamentale perché /v1/matches
+   * ci sta dando le partite programmate.
+   */
+
+  return fetchBBS(
+    `/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&limit=${STORED_MATCHES_LIMIT}`,
+    MATCH_TIMEOUT
+  );
+}
+
+
+/* =========================================================
+   MATCH STATS
 ========================================================= */
 
 async function fetchMatchStats(matchId) {
@@ -472,20 +492,14 @@ async function fetchMatchStats(matchId) {
     return {
       ok: false,
       status: 400,
-      xG: null,
-      data: null
+      data: null,
+      xG: null
     };
   }
 
-  /*
-   * Endpoint documentato BBD:
-   *
-   * /v1/stored/matches/:id/stats
-   */
-
   const result =
     await fetchBBS(
-      `/v1/stored/matches/${encodeURIComponent(matchId)}/stats?sport=${SPORT}`,
+      `/v1/stored/matches/${encodeURIComponent(matchId)}/stats`,
       OPTIONAL_TIMEOUT
     );
 
@@ -499,7 +513,7 @@ async function fetchMatchStats(matchId) {
 
 
 /* =========================================================
-   LINEUP ENDPOINT
+   LINEUPS
 ========================================================= */
 
 async function fetchMatchLineup(matchId) {
@@ -512,28 +526,10 @@ async function fetchMatchLineup(matchId) {
     };
   }
 
-  /*
-   * Endpoint documentato BBD:
-   *
-   * /v1/stored/matches/:id/lineups
-   */
-
   return fetchBBS(
-    `/v1/stored/matches/${encodeURIComponent(matchId)}/lineups?sport=${SPORT}`,
+    `/v1/stored/matches/${encodeURIComponent(matchId)}/lineups`,
     OPTIONAL_TIMEOUT
   );
-}
-
-
-/* =========================================================
-   LIMIT ARRAY
-========================================================= */
-
-function takeLimited(array, max) {
-
-  return Array.isArray(array)
-    ? array.slice(0, max)
-    : [];
 }
 
 
@@ -543,8 +539,7 @@ function takeLimited(array, max) {
 
 async function run(res) {
 
-  const started =
-    Date.now();
+  const started = Date.now();
 
   const diagnostics = {
 
@@ -558,6 +553,12 @@ async function run(res) {
       elapsedMs: null
     },
 
+    storedMatches: {
+      status: null,
+      elapsedMs: null,
+      count: 0
+    },
+
     standings: {
       status: null,
       elapsedMs: null
@@ -567,13 +568,15 @@ async function run(res) {
       requested: 0,
       successful: 0,
       withXG: 0,
-      errors: 0
+      errors: 0,
+      rateLimited: false
     },
 
     lineups: {
       requested: 0,
       successful: 0,
-      errors: 0
+      errors: 0,
+      rateLimited: false
     }
   };
 
@@ -597,10 +600,10 @@ async function run(res) {
 
 
   /* =======================================================
-     MATCHES
+     LIVE / SCHEDULED MATCHES
   ======================================================= */
 
-  const matchesStarted =
+  const matchStarted =
     Date.now();
 
   diagnostics.requests++;
@@ -615,7 +618,7 @@ async function run(res) {
     matchesResult.status;
 
   diagnostics.matches.elapsedMs =
-    Date.now() - matchesStarted;
+    Date.now() - matchStarted;
 
 
   if (!matchesResult.ok) {
@@ -657,6 +660,44 @@ async function run(res) {
 
 
   /* =======================================================
+     STORED / HISTORICAL MATCHES
+  ======================================================= */
+
+  const storedStarted =
+    Date.now();
+
+  diagnostics.requests++;
+
+  const storedResult =
+    await fetchStoredMatches();
+
+  diagnostics.storedMatches.status =
+    storedResult.status;
+
+  diagnostics.storedMatches.elapsedMs =
+    Date.now() - storedStarted;
+
+
+  let storedMatches = [];
+
+  if (storedResult.ok) {
+
+    storedMatches =
+      extractArray(
+        storedResult.data,
+        [
+          "matches",
+          "fixtures",
+          "events"
+        ]
+      );
+  }
+
+  diagnostics.storedMatches.count =
+    storedMatches.length;
+
+
+  /* =======================================================
      STANDINGS
   ======================================================= */
 
@@ -695,44 +736,26 @@ async function run(res) {
 
 
   /* =======================================================
-     CANDIDATE MATCHES PER XG
+     STATS / XG
   ======================================================= */
 
   /*
-   * Prima proviamo le partite completate.
+   * Usiamo le partite storiche.
    *
-   * Se BBD non restituisce uno status chiaro,
-   * prendiamo comunque le prime partite che
-   * possiedono un id.
+   * Se stored/matches non è disponibile,
+   * non facciamo richieste inutili.
    */
 
-  let completedMatches =
-    matches.filter(isCompletedMatch);
-
-
-  if (!completedMatches.length) {
-
-    completedMatches =
-      matches.filter(
-        match => Boolean(getMatchId(match))
-      );
-  }
-
-
   const statsCandidates =
-    takeLimited(
-      completedMatches,
-      MAX_STATS_REQUESTS
-    );
+    storedMatches
+      .filter(match => Boolean(getMatchId(match)))
+      .slice(0, MAX_STATS_REQUESTS);
 
-
-  /* =======================================================
-     XG
-  ======================================================= */
-
-  const teamXG = {};
 
   const matchXG = [];
+
+  const teamAccumulator = {};
+
 
   for (const match of statsCandidates) {
 
@@ -746,159 +769,155 @@ async function run(res) {
     const matchId =
       getMatchId(match);
 
-    if (!matchId) {
-      continue;
-    }
-
     diagnostics.stats.requested++;
     diagnostics.requests++;
 
     const statsResult =
       await fetchMatchStats(matchId);
 
+
     if (!statsResult.ok) {
 
       diagnostics.stats.errors++;
 
-      /*
-       * 429:
-       * non continuiamo a martellare BBD.
-       */
       if (statsResult.status === 429) {
+
+        diagnostics.stats.rateLimited = true;
+
         break;
       }
 
       continue;
     }
 
+
     diagnostics.stats.successful++;
 
-    if (statsResult.xG) {
 
-      diagnostics.stats.withXG++;
-
-      const xg =
-        statsResult.xG;
-
-      const homeName =
-        match?.home?.name ??
-        match?.home_team?.name ??
-        match?.home_team ??
-        match?.homeTeam ??
-        "";
-
-      const awayName =
-        match?.away?.name ??
-        match?.away_team?.name ??
-        match?.away_team ??
-        match?.awayTeam ??
-        "";
-
-      matchXG.push({
-
-        matchId,
-
-        homeTeam:
-          homeName,
-
-        awayTeam:
-          awayName,
-
-        homeXG:
-          Number(xg.homeXG.toFixed(3)),
-
-        awayXG:
-          Number(xg.awayXG.toFixed(3)),
-
-        source:
-          "BBD stored match stats"
-      });
+    if (!statsResult.xG) {
+      continue;
+    }
 
 
-      /*
-       * Salviamo anche una media semplice
-       * per squadra.
-       *
-       * Viene usata dal predictor come fallback
-       * se la partita selezionata non possiede
-       * xG diretto.
-       */
-
-      const homeKey =
-        String(homeName)
-          .trim()
-          .toLowerCase();
-
-      const awayKey =
-        String(awayName)
-          .trim()
-          .toLowerCase();
+    diagnostics.stats.withXG++;
 
 
-      if (homeKey) {
+    const homeTeam =
+      getTeamName(
+        match.home
+      ) ||
+      getTeamName(
+        match.home_team
+      ) ||
+      match.homeTeam ||
+      "";
 
-        if (!teamXG[homeKey]) {
 
-          teamXG[homeKey] = {
-            sum: 0,
-            count: 0
-          };
-        }
+    const awayTeam =
+      getTeamName(
+        match.away
+      ) ||
+      getTeamName(
+        match.away_team
+      ) ||
+      match.awayTeam ||
+      "";
 
-        teamXG[homeKey].sum +=
-          xg.homeXG;
 
-        teamXG[homeKey].count++;
+    const xg =
+      statsResult.xG;
+
+
+    matchXG.push({
+
+      matchId,
+
+      homeTeam,
+
+      awayTeam,
+
+      homeXG:
+        Number(
+          xg.homeXG.toFixed(3)
+        ),
+
+      awayXG:
+        Number(
+          xg.awayXG.toFixed(3)
+        ),
+
+      source:
+        "BBD stored match stats"
+    });
+
+
+    /*
+     * Accumulatore xG squadra.
+     */
+
+    const homeKey =
+      homeTeam
+        .trim()
+        .toLowerCase();
+
+
+    const awayKey =
+      awayTeam
+        .trim()
+        .toLowerCase();
+
+
+    if (homeKey) {
+
+      if (!teamAccumulator[homeKey]) {
+
+        teamAccumulator[homeKey] = {
+          sum: 0,
+          count: 0
+        };
       }
 
+      teamAccumulator[homeKey].sum +=
+        xg.homeXG;
 
-      if (awayKey) {
+      teamAccumulator[homeKey].count++;
+    }
 
-        if (!teamXG[awayKey]) {
 
-          teamXG[awayKey] = {
-            sum: 0,
-            count: 0
-          };
-        }
+    if (awayKey) {
 
-        teamXG[awayKey].sum +=
-          xg.awayXG;
+      if (!teamAccumulator[awayKey]) {
 
-        teamXG[awayKey].count++;
+        teamAccumulator[awayKey] = {
+          sum: 0,
+          count: 0
+        };
       }
+
+      teamAccumulator[awayKey].sum +=
+        xg.awayXG;
+
+      teamAccumulator[awayKey].count++;
     }
   }
 
 
-  /*
-   * Convertiamo:
-   *
-   * {
-   *   sum,
-   *   count
-   * }
-   *
-   * in:
-   *
-   * {
-   *   "inter milan": 1.72
-   * }
-   */
+  /* =======================================================
+     TEAM XG AVERAGE
+  ======================================================= */
 
-  const normalizedTeamXG = {};
+  const teamXG = {};
 
   for (
     const [team, value]
-    of Object.entries(teamXG)
+    of Object.entries(teamAccumulator)
   ) {
 
     if (
-      value &&
       value.count > 0
     ) {
 
-      normalizedTeamXG[team] =
+      teamXG[team] =
         Number(
           (
             value.sum /
@@ -914,21 +933,23 @@ async function run(res) {
   ======================================================= */
 
   /*
-   * Le lineups sono utili soprattutto per
-   * partite vicine al calcio d'inizio.
+   * Per le lineup prendiamo le partite
+   * correnti/programmate.
    *
-   * Limitiamo a 6 richieste.
+   * BBD pubblica le starting XI normalmente
+   * vicino al calcio d'inizio.
    */
 
   const lineupCandidates =
-    takeLimited(
-      matches.filter(
+    matches
+      .filter(
         match => Boolean(getMatchId(match))
-      ),
-      MAX_LINEUP_REQUESTS
-    );
+      )
+      .slice(0, MAX_LINEUP_REQUESTS);
+
 
   const lineups = [];
+
 
   for (const match of lineupCandidates) {
 
@@ -942,28 +963,30 @@ async function run(res) {
     const matchId =
       getMatchId(match);
 
-    if (!matchId) {
-      continue;
-    }
-
     diagnostics.lineups.requested++;
     diagnostics.requests++;
 
     const lineupResult =
       await fetchMatchLineup(matchId);
 
+
     if (!lineupResult.ok) {
 
       diagnostics.lineups.errors++;
 
       if (lineupResult.status === 429) {
+
+        diagnostics.lineups.rateLimited = true;
+
         break;
       }
 
       continue;
     }
 
+
     diagnostics.lineups.successful++;
+
 
     lineups.push({
 
@@ -988,7 +1011,7 @@ async function run(res) {
       matchXG.length,
 
     teamsWithXG:
-      Object.keys(normalizedTeamXG).length,
+      Object.keys(teamXG).length,
 
     lineups:
       lineups.length,
@@ -1017,19 +1040,24 @@ async function run(res) {
 
     coverage,
 
+    /*
+     * Partite correnti / future.
+     */
     matches,
 
     /*
-     * xG delle singole partite.
+     * xG delle partite storiche.
      */
     matchXG,
 
     /*
      * xG medio per squadra.
      */
-    teamXG:
-      normalizedTeamXG,
+    teamXG,
 
+    /*
+     * Lineup delle partite correnti.
+     */
     lineups,
 
     standings,
@@ -1046,7 +1074,7 @@ async function run(res) {
 
 
 /* =========================================================
-   HANDLER VERCEL
+   VERCEL HANDLER
 ========================================================= */
 
 export default async function handler(req, res) {
@@ -1100,7 +1128,7 @@ export default async function handler(req, res) {
   } catch (error) {
 
     console.error(
-      "Sync fatal error:",
+      "SYNC FATAL:",
       error
     );
 
