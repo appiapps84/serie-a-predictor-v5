@@ -860,33 +860,36 @@ export default async function handler(
        * We deliberately DON'T return the complete stats
        * payload.
        */
-      if (
-        diagnostics.xGSamples.length < 3
-      ) {
-        diagnostics.xGSamples.push({
-          id: matchId,
 
-          homeTeam:
-            row.homeTeam,
 
-          awayTeam:
-            row.awayTeam,
+if (diagnostics.xGSamples.length < 1) {
+  let sampleStats = null;
 
-          foundXG:
-            Boolean(xg),
+  try {
+    sampleStats = JSON.stringify(statsPayload);
+  } catch {
+    sampleStats = null;
+  }
 
-          parsedXG:
-            xg || null,
+  diagnostics.xGSamples.push({
+    id: matchId,
 
-          interestingKeys:
-            Array.from(
-              collectInterestingKeys(
-                statsPayload
-              )
-            ).slice(0, 50),
-        });
-      }
-    }
+    homeTeam: row.homeTeam,
+    awayTeam: row.awayTeam,
+
+    foundXG: Boolean(xg),
+    parsedXG: xg || null,
+
+    interestingKeys: Array.from(
+      collectInterestingKeys(statsPayload)
+    ).slice(0, 100),
+
+    sampleStats: sampleStats
+      ? sampleStats.slice(0, 8000)
+      : null,
+  });
+}
+      
 
     const directMatchXG = {};
 
