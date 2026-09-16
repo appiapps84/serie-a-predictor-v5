@@ -1,59 +1,363 @@
 const BBS_BASE = "https://api.bigballsdata.com";
-const LEAGUE = "serie-a";
+const LEAGUE = "seriea";
 const SPORT = "football";
 
-const TIMEOUT = 10000;
+const TIMEOUT = 12000;
 
-const HISTORICAL_MATCH_LIMIT = 100;
-const HISTORICAL_DETAIL_LIMIT = 20;
-const FUTURE_DETAIL_LIMIT = 20;
+// Free plan: teniamoci molto sotto 100 req/min.
+// 1 matches + 1 standings + 8 historical stats + 6 lineups = 16 max.
+const MAX_HISTORICAL_STATS = 8;
+const MAX_LINEUPS = 6;
 
-function getApiKey() {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getKey() {
   return process.env.BBS_API_KEY || "";
 }
 
-async function bbsFetch(path) {
-  const key = getApiKey();
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
 
-  if (!key) {
-    throw new Error("BBS_API_KEY non configurata su Vercel");
+function teamName(value) {
+  if (!value) return null;
+
+  if (typeof value === "string") {
+    return value;
   }
 
+  if (typeof value === "object") {
+    return (
+      value.name ||
+      value.team_name ||
+      value.teamName ||
+      value.short_name ||
+      value.shortName ||
+      null
+    );
+  }
+
+  return null;
+}
+
+function extractArray(payload) {
+  if (Array.isArray(payload)) return payload;
+
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.matches)) return payload.data.matches;
+  if (Array.isArray(payload?.matches)) return payload.matches;
+
+  return [];
+}
+
+function extractData(payload) {
+  if (payload?.data !== undefined) return payload.data;
+  return payload;
+}
+
+function getMatchId(match) {
+  return (
+    match?.id ||
+    match?.match_id ||
+    match?.matchId ||
+    match?.fixture_id ||
+    match?.fixtureId ||
+    null
+  );
+}
+
+function getKickoff(match) {
+  return (
+    match?.kickoff_utc ||
+    match?.kickoffUtc ||
+    match?.kickoff ||
+    match?.start_time ||
+    match?.startTime ||
+    match?.date ||
+    null
+  );
+}
+
+function getStatus(match) {
+  return normalizeText(
+    match?.status ||
+      match?.state ||
+      match?.match_status ||
+      match?.matchStatus ||
+      ""
+  );
+}
+
+function getHomeTeam(match) {
+  return teamName(
+    match?.home ||
+      match?.home_team ||
+      match?.homeTeam ||
+      match?.teams?.home
+  );
+}
+
+function getAwayTeam(match) {
+  return teamName(
+    match?.away ||
+      match?.away_team ||
+      match?.awayTeam ||
+      match?.teams?.away
+  );
+}
+
+function isFinished(match) {
+  const status = getStatus(match);
+
+  if (
+    [
+      "finished",
+      "final",
+      "ft",
+      "completed",
+      "complete",
+      "ended",
+    ].includes(status)
+  ) {
+    return true;
+  }
+
+  const score =
+    match?.score ||
+    match?.scores ||
+    match?.final_score ||
+    match?.finalScore;
+
+  if (score && typeof score === "object") {
+    const home =
+      score.home ??
+      score.home_score ??
+      score.homeScore ??
+      score?.full_time?.home;
+
+    const away =
+      score.away ??
+      score.away_score ??
+      score.awayScore ??
+      score?.full_time?.away;
+
+    if (home !== null && home !== undefined &&
+        away !== null && away !== undefined) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isFuture(match) {
+  const kickoff = getKickoff(match);
+
+  if (!kickoff) return false;
+
+  const time = Date.parse(kickoff);
+
+  if (!Number.isFinite(time)) return false;
+
+  return time > Date.now();
+}
+
+/**
+ * Recursive search for xG fields.
+ *
+ * Supports shapes such as:
+ * {
+ *   home_xg: 1.43,
+ *   away_xg: 0.82
+ * }
+ *
+ * or:
+ * {
+ *   expected_goals: {
+ *      home: 1.43,
+ *      away: 0.82
+ *   }
+ * }
+ *
+ * or nested stats/groups/items structures.
+ */
+function findXGValues(node, depth = 0) {
+  if (node === null || node === undefined || depth > 12) {
+    return null;
+  }
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const result = findXGValues(item, depth + 1);
+      if (result) return result;
+    }
+    return null;
+  }
+
+  if (typeof node !== "object") {
+    return null;
+  }
+
+  const keys = Object.keys(node);
+  const lowerKeys = keys.map((k) => [k, normalizeText(k)]);
+
+  // Direct home/away xG fields
+  const homeKey = lowerKeys.find(([original, lower]) =>
+    /^(home|home_team|hometeam|home_side).*?(xg|expected.*goal)/i.test(
+      lower.replace(/\s+/g, "_")
+    )
+  );
+
+  const awayKey = lowerKeys.find(([original, lower]) =>
+    /^(away|away_team|awayteam|away_side).*?(xg|expected.*goal)/i.test(
+      lower.replace(/\s+/g, "_")
+    )
+  );
+
+  if (homeKey && awayKey) {
+    const home = Number(node[homeKey[0]]);
+    const away = Number(node[awayKey[0]]);
+
+    if (
+      Number.isFinite(home) &&
+      Number.isFinite(away) &&
+      home >= 0 &&
+      away >= 0 &&
+      home <= 10 &&
+      away <= 10
+    ) {
+      return { home, away };
+    }
+  }
+
+  // Object like { home: 1.2, away: 0.8 }
+  const xgLikeKey = lowerKeys.find(
+    ([, lower]) =>
+      lower === "xg" ||
+      lower === "expected_goals" ||
+      lower === "expected_goals_xg" ||
+      lower.includes("expected goals")
+  );
+
+  if (xgLikeKey) {
+    const candidate = node[xgLikeKey[0]];
+
+    if (candidate && typeof candidate === "object") {
+      const home = Number(
+        candidate.home ??
+          candidate.home_xg ??
+          candidate.homeXG ??
+          candidate.home_expected_goals
+      );
+
+      const away = Number(
+        candidate.away ??
+          candidate.away_xg ??
+          candidate.awayXG ??
+          candidate.away_expected_goals
+      );
+
+      if (
+        Number.isFinite(home) &&
+        Number.isFinite(away) &&
+        home >= 0 &&
+        away >= 0 &&
+        home <= 10 &&
+        away <= 10
+      ) {
+        return { home, away };
+      }
+    }
+  }
+
+  // Search nested objects
+  for (const key of keys) {
+    const result = findXGValues(node[key], depth + 1);
+    if (result) return result;
+  }
+
+  return null;
+}
+
+function collectInterestingKeys(node, output = new Set(), depth = 0) {
+  if (node === null || node === undefined || depth > 8) {
+    return output;
+  }
+
+  if (Array.isArray(node)) {
+    for (const item of node.slice(0, 30)) {
+      collectInterestingKeys(item, output, depth + 1);
+    }
+    return output;
+  }
+
+  if (typeof node !== "object") {
+    return output;
+  }
+
+  for (const [key, value] of Object.entries(node)) {
+    const normalized = normalizeText(key);
+
+    if (
+      normalized.includes("xg") ||
+      normalized.includes("expected") ||
+      normalized.includes("goal")
+    ) {
+      output.add(key);
+    }
+
+    collectInterestingKeys(value, output, depth + 1);
+  }
+
+  return output;
+}
+
+async function fetchJSON(path, key, options = {}) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT);
+
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, TIMEOUT);
 
   try {
+    const headers = {
+      Authorization: `Bearer ${key}`,
+      "X-API-Key": key,
+      Accept: "application/json",
+      ...(options.headers || {}),
+    };
+
     const response = await fetch(`${BBS_BASE}${path}`, {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "X-API-Key": key,
-        Accept: "application/json",
-      },
+      headers,
       signal: controller.signal,
     });
 
-    const text = await response.text();
+    const retryAfter = response.headers.get("Retry-After");
 
-    let body;
+    let body = null;
 
     try {
-      body = text ? JSON.parse(text) : null;
+      body = await response.json();
     } catch {
-      body = text;
+      body = null;
     }
 
     if (!response.ok) {
       const error = new Error(
-        `BBS ${response.status}: ${
-          typeof body === "string"
-            ? body.slice(0, 500)
-            : JSON.stringify(body).slice(0, 500)
-        }`
+        `BBS ${response.status}: ${JSON.stringify(body)}`
       );
 
       error.status = response.status;
       error.body = body;
+      error.retryAfter = retryAfter
+        ? Number(retryAfter)
+        : null;
 
       throw error;
     }
@@ -64,929 +368,328 @@ async function bbsFetch(path) {
   }
 }
 
-function arrayFrom(payload) {
-  if (Array.isArray(payload)) return payload;
-
-  if (Array.isArray(payload?.data)) {
-    return payload.data;
-  }
-
-  if (Array.isArray(payload?.matches)) {
-    return payload.matches;
-  }
-
-  if (Array.isArray(payload?.results)) {
-    return payload.results;
-  }
-
-  return [];
-}
-
-function toNumber(value) {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-
-  const number = Number(value);
-
-  return Number.isFinite(number) ? number : null;
-}
-
-function firstNumber(...values) {
-  for (const value of values) {
-    const number = toNumber(value);
-
-    if (number !== null) {
-      return number;
-    }
-  }
-
-  return null;
-}
-
-function teamName(team) {
-  if (!team) return null;
-
-  if (typeof team === "string") {
-    return team;
-  }
-
-  return (
-    team.name ||
-    team.short_name ||
-    team.shortName ||
-    team.display_name ||
-    team.displayName ||
-    null
-  );
-}
-
-function normalizeMatch(match) {
-  if (!match) return null;
-
-  const home =
-    teamName(match.home) ||
-    match.homeTeam ||
-    match.home_team ||
-    match.home_name ||
-    null;
-
-  const away =
-    teamName(match.away) ||
-    match.awayTeam ||
-    match.away_team ||
-    match.away_name ||
-    null;
-
-  const score = match.score || match.scores || match.result || null;
-
-  const homeScore = firstNumber(
-    score?.home,
-    score?.home_score,
-    score?.homeScore,
-    score?.value?.home,
-    match.homeScore,
-    match.home_score
-  );
-
-  const awayScore = firstNumber(
-    score?.away,
-    score?.away_score,
-    score?.awayScore,
-    score?.value?.away,
-    match.awayScore,
-    match.away_score
-  );
-
+function sanitizeError(error) {
   return {
-    id: match.id || match.match_id || null,
-
-    homeTeam: home,
-
-    awayTeam: away,
-
-    kickoff:
-      match.kickoff_utc ||
-      match.kickoffUtc ||
-      match.kickoff ||
-      match.start_time ||
-      match.startTime ||
-      null,
-
-    status: match.status || null,
-
-    matchday:
-      match.matchday ||
-      match.match_day ||
-      match.round ||
-      null,
-
-    homeScore,
-
-    awayScore,
-
-    raw: match,
+    status: error?.status || null,
+    message: error?.message || String(error),
+    retryAfter: error?.retryAfter ?? null,
   };
 }
 
-function isCompletedMatch(match) {
-  if (!match) return false;
+async function safeFetch(path, key, diagnostics, label) {
+  try {
+    return await fetchJSON(path, key);
+  } catch (error) {
+    diagnostics.errors.push({
+      label,
+      path,
+      ...sanitizeError(error),
+    });
 
-  const status = String(match.status || "").toLowerCase();
-
-  const completedStatuses = [
-    "finished",
-    "completed",
-    "final",
-    "ft",
-    "ended",
-    "post",
-    "closed",
-  ];
-
-  if (completedStatuses.some((value) => status.includes(value))) {
-    return true;
-  }
-
-  return (
-    match.homeScore !== null &&
-    match.awayScore !== null
-  );
-}
-
-/**
- * Normalizza una stringa per poter riconoscere
- * nomi come "xG", "xg", "expected_goals", ecc.
- */
-function normalizeKey(key) {
-  return String(key)
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-
-/**
- * Cerca ricorsivamente tutti i campi xG.
- *
- * Questa funzione è volutamente molto permissiva perché
- * l'endpoint BBS può contenere gli xG dentro diversi
- * livelli dell'oggetto stats.
- */
-function findXGValues(payload) {
-  const found = [];
-
-  function walk(value, path = [], depth = 0) {
-    if (value === null || value === undefined) {
-      return;
-    }
-
-    if (depth > 10) {
-      return;
-    }
-
-    if (Array.isArray(value)) {
-      value.forEach((item, index) => {
-        walk(item, [...path, index], depth + 1);
-      });
-
-      return;
-    }
-
-    if (typeof value !== "object") {
-      return;
-    }
-
-    for (const [key, child] of Object.entries(value)) {
-      const normalized = normalizeKey(key);
-
-      if (
-        normalized === "xg" ||
-        normalized === "expectedgoals" ||
-        normalized === "expectedgoalsfor" ||
-        normalized === "expectedgoalsagainst"
-      ) {
-        const number = toNumber(child);
-
-        if (number !== null) {
-          found.push({
-            key,
-            value: number,
-            path: [...path, key],
-          });
-        }
-      }
-
-      walk(child, [...path, key], depth + 1);
-    }
-  }
-
-  walk(payload);
-
-  return found;
-}
-
-/**
- * Cerca di capire a quale squadra appartiene ogni xG.
- *
- * Gestisce:
- *   home / away
- *   home_team / away_team
- *   team.name
- *   name
- *   label
- *   side
- */
-function extractTeamXG(statsPayload, homeTeam, awayTeam) {
-  if (!statsPayload) {
     return null;
   }
-
-  const direct = findXGValues(statsPayload);
-
-  if (!direct.length) {
-    return null;
-  }
-
-  let homeXG = null;
-  let awayXG = null;
-
-  /**
-   * Prima cerchiamo gli oggetti che contengono direttamente
-   * un xG e informazioni sulla squadra/lato.
-   */
-  function scan(value, context = {}) {
-    if (
-      value === null ||
-      value === undefined ||
-      typeof value !== "object"
-    ) {
-      return;
-    }
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        scan(item, context);
-      }
-
-      return;
-    }
-
-    const localContext = {
-      ...context,
-      ...value,
-    };
-
-    const localHome =
-      localContext.home ||
-      localContext.home_team ||
-      localContext.homeTeam;
-
-    const localAway =
-      localContext.away ||
-      localContext.away_team ||
-      localContext.awayTeam;
-
-    const localTeam =
-      localContext.team ||
-      localContext.team_name ||
-      localContext.teamName ||
-      localContext.name;
-
-    const side = String(
-      localContext.side ||
-      localContext.location ||
-      localContext.homeAway ||
-      ""
-    ).toLowerCase();
-
-    const xg = firstNumber(
-      localContext.xg,
-      localContext.xG,
-      localContext.expected_goals,
-      localContext.expectedGoals,
-      localContext.expected_goals_for,
-      localContext.expectedGoalsFor
-    );
-
-    if (xg !== null) {
-      const teamText = String(localTeam || "").toLowerCase();
-
-      if (
-        side === "home" ||
-        side === "h" ||
-        teamText === String(homeTeam || "").toLowerCase() ||
-        teamText.includes(String(homeTeam || "").toLowerCase())
-      ) {
-        homeXG = xg;
-      }
-
-      if (
-        side === "away" ||
-        side === "a" ||
-        teamText === String(awayTeam || "").toLowerCase() ||
-        teamText.includes(String(awayTeam || "").toLowerCase())
-      ) {
-        awayXG = xg;
-      }
-    }
-
-    /**
-     * Caso classico:
-     *
-     * {
-     *   home: { xg: 1.5 },
-     *   away: { xg: 0.8 }
-     * }
-     */
-    if (localHome && typeof localHome === "object") {
-      const value = firstNumber(
-        localHome.xg,
-        localHome.xG,
-        localHome.expected_goals,
-        localHome.expectedGoals
-      );
-
-      if (value !== null) {
-        homeXG = value;
-      }
-    }
-
-    if (localAway && typeof localAway === "object") {
-      const value = firstNumber(
-        localAway.xg,
-        localAway.xG,
-        localAway.expected_goals,
-        localAway.expectedGoals
-      );
-
-      if (value !== null) {
-        awayXG = value;
-      }
-    }
-
-    for (const child of Object.values(value)) {
-      if (child && typeof child === "object") {
-        scan(child, localContext);
-      }
-    }
-  }
-
-  scan(statsPayload);
-
-  /**
-   * Se abbiamo trovato esattamente due xG ma non siamo riusciti
-   * ad associarli alle squadre, assumiamo l'ordine home/away.
-   *
-   * Questo è utile per risposte del tipo:
-   * [
-   *   { xg: 1.72 },
-   *   { xg: 0.84 }
-   * ]
-   */
-  if (
-    homeXG === null &&
-    awayXG === null &&
-    direct.length >= 2
-  ) {
-    homeXG = direct[0].value;
-    awayXG = direct[1].value;
-  }
-
-  if (
-    homeXG === null &&
-    awayXG === null
-  ) {
-    return null;
-  }
-
-  return {
-    homeTeam,
-    awayTeam,
-    homeXG,
-    awayXG,
-  };
 }
 
-function addTeamXG(
-  teamXG,
-  team,
-  xgFor,
-  xgAgainst
-) {
-  if (!team) return;
+function buildHistoricalTeamXG(historicalRows) {
+  const buckets = {};
 
-  const cleanFor = toNumber(xgFor);
-  const cleanAgainst = toNumber(xgAgainst);
+  function add(team, xg) {
+    if (!team || !Number.isFinite(xg)) return;
 
-  if (
-    cleanFor === null &&
-    cleanAgainst === null
-  ) {
-    return;
+    const normalized = normalizeText(team);
+
+    if (!normalized) return;
+
+    if (!buckets[normalized]) {
+      buckets[normalized] = {
+        team,
+        xg: [],
+      };
+    }
+
+    buckets[normalized].xg.push(xg);
   }
 
-  if (!teamXG[team]) {
-    teamXG[team] = {
-      matches: 0,
-      xgFor: 0,
-      xgAgainst: 0,
-      samples: 0,
-    };
+  for (const row of historicalRows) {
+    if (!row.xg) continue;
+
+    const home = row.homeTeam;
+    const away = row.awayTeam;
+
+    if (home) add(home, row.xg.home);
+    if (away) add(away, row.xg.away);
   }
 
-  const row = teamXG[team];
-
-  row.matches += 1;
-
-  if (cleanFor !== null) {
-    row.xgFor += cleanFor;
-  }
-
-  if (cleanAgainst !== null) {
-    row.xgAgainst += cleanAgainst;
-  }
-
-  row.samples += 1;
-}
-
-function finalizeTeamXG(teamXG) {
   const result = {};
 
-  for (const [team, row] of Object.entries(teamXG)) {
-    if (!row.samples) continue;
+  for (const [normalized, bucket] of Object.entries(buckets)) {
+    if (!bucket.xg.length) continue;
 
-    result[team] = {
-      matches: row.matches,
+    const average =
+      bucket.xg.reduce((sum, value) => sum + value, 0) /
+      bucket.xg.length;
 
-      xgFor: Number(
-        (row.xgFor / row.samples).toFixed(3)
-      ),
-
-      xgAgainst: Number(
-        (row.xgAgainst / row.samples).toFixed(3)
-      ),
+    result[bucket.team] = {
+      xGPerMatch: Number(average.toFixed(3)),
+      samples: bucket.xg.length,
     };
   }
 
   return result;
 }
 
-function normalizeLineups(payload) {
-  if (!payload) return null;
+export default async function handler(req, res) {
+  const startedAt = Date.now();
+  const key = getKey();
 
-  if (Array.isArray(payload)) {
-    return payload;
-  }
+  res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
-  if (Array.isArray(payload.data)) {
-    return payload.data;
-  }
-
-  if (Array.isArray(payload.lineups)) {
-    return payload.lineups;
-  }
-
-  if (
-    payload.data?.lineups &&
-    Array.isArray(payload.data.lineups)
-  ) {
-    return payload.data.lineups;
-  }
-
-  return null;
-}
-
-function formatError(error) {
-  return {
-    status: error?.status || null,
-    message: error?.message || String(error),
-
-    body:
-      typeof error?.body === "string"
-        ? error.body.slice(0, 1000)
-        : error?.body || null,
-  };
-}
-
-async function getFutureDetails(matches) {
-  const candidates = matches
-    .filter((match) => match?.id)
-    .slice(0, FUTURE_DETAIL_LIMIT);
-
-  const details = [];
-
-  for (const match of candidates) {
-    const detail = {
-      id: match.id,
-      xG: null,
-      lineups: null,
-      errors: [],
-    };
-
-    try {
-      const stats = await bbsFetch(
-        `/v1/stored/matches/${encodeURIComponent(
-          match.id
-        )}/stats`
-      );
-
-      const xg = extractTeamXG(
-        stats,
-        match.homeTeam,
-        match.awayTeam
-      );
-
-      if (xg) {
-        detail.xG = xg;
-      }
-    } catch (error) {
-      detail.errors.push({
-        type: "stats",
-        ...formatError(error),
-      });
-    }
-
-    try {
-      const lineups = await bbsFetch(
-        `/v1/stored/matches/${encodeURIComponent(
-          match.id
-        )}/lineups`
-      );
-
-      detail.lineups =
-        normalizeLineups(lineups);
-    } catch (error) {
-      detail.errors.push({
-        type: "lineups",
-        ...formatError(error),
-      });
-    }
-
-    details.push(detail);
-  }
-
-  return details;
-}
-
-async function getHistoricalXG() {
-  const diagnostics = [];
-
-  let historicalPayload;
-
-  try {
-    historicalPayload = await bbsFetch(
-      `/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&limit=${HISTORICAL_MATCH_LIMIT}`
-    );
-  } catch (error) {
-    diagnostics.push({
-      type: "historical_matches",
-      ...formatError(error),
+  if (!key) {
+    return res.status(500).json({
+      ok: false,
+      error: "Missing BBS_API_KEY environment variable",
     });
-
-    return {
-      teamXG: {},
-      historicalMatches: [],
-      xGCount: 0,
-      diagnostics,
-    };
   }
 
-  const historicalMatches = arrayFrom(
-    historicalPayload
-  )
-    .map(normalizeMatch)
-    .filter(Boolean)
-    .filter(isCompletedMatch);
-
-  historicalMatches.sort((a, b) => {
-    const dateA = a.kickoff
-      ? new Date(a.kickoff).getTime()
-      : 0;
-
-    const dateB = b.kickoff
-      ? new Date(b.kickoff).getTime()
-      : 0;
-
-    return dateB - dateA;
-  });
-
-  const selected =
-    historicalMatches.slice(
-      0,
-      HISTORICAL_DETAIL_LIMIT
-    );
-
-  const teamAccumulator = {};
-
-  let xGCount = 0;
-
-  for (const match of selected) {
-    if (!match.id) continue;
-
-    try {
-      const stats = await bbsFetch(
-        `/v1/stored/matches/${encodeURIComponent(
-          match.id
-        )}/stats`
-      );
-
-      const xg = extractTeamXG(
-        stats,
-        match.homeTeam,
-        match.awayTeam
-      );
-
-      if (!xg) {
-        diagnostics.push({
-          type: "historical_stats",
-          matchId: match.id,
-          message:
-            "Stats returned but xG fields were not found",
-        });
-
-        continue;
-      }
-
-      if (
-        xg.homeXG === null &&
-        xg.awayXG === null
-      ) {
-        continue;
-      }
-
-      addTeamXG(
-        teamAccumulator,
-        match.homeTeam,
-        xg.homeXG,
-        xg.awayXG
-      );
-
-      addTeamXG(
-        teamAccumulator,
-        match.awayTeam,
-        xg.awayXG,
-        xg.homeXG
-      );
-
-      xGCount += 1;
-    } catch (error) {
-      diagnostics.push({
-        type: "historical_stats",
-        matchId: match.id,
-        homeTeam: match.homeTeam,
-        awayTeam: match.awayTeam,
-        ...formatError(error),
-      });
-    }
-  }
-
-  return {
-    teamXG:
-      finalizeTeamXG(teamAccumulator),
-
-    historicalMatches: selected,
-
-    xGCount,
-
-    diagnostics,
+  const diagnostics = {
+    apiKeyDetected: true,
+    errors: [],
+    historicalStatsChecked: 0,
+    lineupsChecked: 0,
+    xGSamples: [],
   };
-}
 
-async function getStandings() {
   try {
-    const payload = await bbsFetch(
-      `/v1/standings?sport=${SPORT}&league=${LEAGUE}`
+    // ---------------------------------------------------------
+    // 1. CURRENT MATCHES — 1 REQUEST
+    // ---------------------------------------------------------
+
+    const matchesPayload = await fetchJSON(
+      `/v1/matches?sport=${SPORT}&league=${LEAGUE}&limit=50`,
+      key
     );
 
-    return {
-      standings: arrayFrom(payload),
-      error: null,
-    };
-  } catch (error) {
-    return {
-      standings: [],
-      error: formatError(error),
-    };
-  }
-}
+    const matches = extractArray(matchesPayload);
 
-async function getCurrentMatches() {
-  const payload = await bbsFetch(
-    `/v1/matches?sport=${SPORT}&league=${LEAGUE}`
-  );
+    // ---------------------------------------------------------
+    // 2. STANDINGS — 1 REQUEST
+    // ---------------------------------------------------------
 
-  return arrayFrom(payload)
-    .map(normalizeMatch)
-    .filter(Boolean);
-}
+    const standingsPayload = await safeFetch(
+      `/v1/standings?sport=${SPORT}&league=${LEAGUE}`,
+      key,
+      diagnostics,
+      "standings"
+    );
 
-function enrichMatches(
-  matches,
-  details
-) {
-  const detailMap = new Map();
+    const standings = extractArray(standingsPayload);
 
-  for (const detail of details) {
-    detailMap.set(detail.id, detail);
-  }
+    // ---------------------------------------------------------
+    // 3. HISTORICAL MATCHES — NO MASSIVE HISTORY CALL
+    // ---------------------------------------------------------
 
-  return matches.map((match) => {
-    const detail =
-      detailMap.get(match.id);
+    const historicalPayload = await safeFetch(
+      `/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&status=finished&limit=20`,
+      key,
+      diagnostics,
+      "historical_matches"
+    );
 
-    if (!detail) {
-      return {
-        ...match,
-        xG: null,
-        lineups: null,
-        detailErrors: [],
+    const historicalMatches = extractArray(historicalPayload);
+
+    // ---------------------------------------------------------
+    // 4. HISTORICAL xG
+    //
+    // Max 8 calls.
+    // We only ask for finished matches.
+    // ---------------------------------------------------------
+
+    const historicalCandidates = historicalMatches
+      .filter(isFinished)
+      .slice(0, MAX_HISTORICAL_STATS);
+
+    const historicalRows = [];
+
+    for (const match of historicalCandidates) {
+      const id = getMatchId(match);
+
+      if (!id) continue;
+
+      const statsPayload = await safeFetch(
+        `/v1/stored/matches/${encodeURIComponent(id)}/stats`,
+        key,
+        diagnostics,
+        "historical_stats"
+      );
+
+      diagnostics.historicalStatsChecked++;
+
+      if (!statsPayload) continue;
+
+      const xg = findXGValues(statsPayload);
+
+      const row = {
+        id,
+        homeTeam: getHomeTeam(match),
+        awayTeam: getAwayTeam(match),
+        kickoff: getKickoff(match),
+        xg: xg || null,
+      };
+
+      historicalRows.push(row);
+
+      // Keep a tiny diagnostic sample, not the entire API response.
+      if (diagnostics.xGSamples.length < 3) {
+        diagnostics.xGSamples.push({
+          id,
+          homeTeam: row.homeTeam,
+          awayTeam: row.awayTeam,
+          foundXG: !!xg,
+          interestingKeys: Array.from(
+            collectInterestingKeys(statsPayload)
+          ).slice(0, 30),
+        });
+      }
+    }
+
+    const teamXG = buildHistoricalTeamXG(historicalRows);
+
+    // ---------------------------------------------------------
+    // 5. LINEUPS
+    //
+    // Only ask for a few upcoming matches.
+    // BBS says confirmed lineups generally appear around 60 min
+    // before kickoff, so querying every future fixture is wasteful.
+    // ---------------------------------------------------------
+
+    const upcoming = matches
+      .filter(isFuture)
+      .sort((a, b) => {
+        const ta = Date.parse(getKickoff(a) || "");
+        const tb = Date.parse(getKickoff(b) || "");
+        return ta - tb;
+      })
+      .slice(0, MAX_LINEUPS);
+
+    const lineups = [];
+
+    for (const match of upcoming) {
+      const id = getMatchId(match);
+
+      if (!id) continue;
+
+      const lineupPayload = await safeFetch(
+        `/v1/stored/matches/${encodeURIComponent(id)}/lineups`,
+        key,
+        diagnostics,
+        "lineups"
+      );
+
+      diagnostics.lineupsChecked++;
+
+      if (lineupPayload) {
+        const data = extractData(lineupPayload);
+
+        lineups.push({
+          matchId: id,
+          homeTeam: getHomeTeam(match),
+          awayTeam: getAwayTeam(match),
+          kickoff: getKickoff(match),
+          data,
+        });
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 6. DIRECT MATCH xG
+    // ---------------------------------------------------------
+
+    const directMatchXG = {};
+
+    for (const row of historicalRows) {
+      if (!row.xg) continue;
+
+      directMatchXG[row.id] = {
+        home: row.xg.home,
+        away: row.xg.away,
       };
     }
 
-    return {
-      ...match,
+    // ---------------------------------------------------------
+    // 7. RESPONSE
+    // ---------------------------------------------------------
 
-      xG: detail.xG
-        ? {
-            home: detail.xG.homeXG,
-            away: detail.xG.awayXG,
-          }
-        : null,
-
-      lineups: detail.lineups,
-
-      detailErrors:
-        detail.errors || [],
-    };
-  });
-}
-
-export default async function handler(
-  req,
-  res
-) {
-  if (
-    req.method !== "GET" &&
-    req.method !== "POST"
-  ) {
-    return res.status(405).json({
-      ok: false,
-      error: "Method not allowed",
-    });
-  }
-
-  const generatedAt =
-    new Date().toISOString();
-
-  try {
-    if (!getApiKey()) {
-      return res.status(500).json({
-        ok: false,
-        error:
-          "BBS_API_KEY non configurata",
-      });
-    }
-
-    const matches =
-      await getCurrentMatches();
-
-    const futureDetails =
-      await getFutureDetails(matches);
-
-    const historical =
-      await getHistoricalXG();
-
-    const standingsResult =
-      await getStandings();
-
-    const enrichedMatches =
-      enrichMatches(
-        matches,
-        futureDetails
-      );
-
-    const directXGCount =
-      enrichedMatches.filter(
-        (match) =>
-          match.xG &&
-          match.xG.home !== null &&
-          match.xG.away !== null
-      ).length;
-
-    const lineupCount =
-      enrichedMatches.filter(
-        (match) =>
-          Array.isArray(match.lineups) &&
-          match.lineups.length > 0
-      ).length;
-
-    const detailErrors =
-      futureDetails
-        .filter(
-          (detail) =>
-            Array.isArray(
-              detail.errors
-            ) &&
-            detail.errors.length > 0
-        )
-        .map((detail) => ({
-          matchId: detail.id,
-          errors: detail.errors,
-        }));
-
-    return res.status(200).json({
+    const response = {
       ok: true,
-
-      source:
-        "Big Balls Sports Data",
-
+      source: "Big Balls Sports Data",
       league: LEAGUE,
-
-      generatedAt,
+      generatedAt: new Date().toISOString(),
 
       coverage: {
-        matches:
-          enrichedMatches.length,
-
-        detailsAttempted:
-          futureDetails.length,
-
-        xG:
-          historical.xGCount,
-
-        directMatchXG:
-          directXGCount,
-
-        lineups:
-          lineupCount,
-
-        standings:
-          standingsResult
-            .standings.length,
-
-        historicalMatches:
-          historical
-            .historicalMatches.length,
-
-        teamsWithXG:
-          Object.keys(
-            historical.teamXG
-          ).length,
+        matches: matches.length,
+        historicalMatches: historicalMatches.length,
+        historicalStatsChecked:
+          diagnostics.historicalStatsChecked,
+        xG: Object.keys(directMatchXG).length,
+        directMatchXG: Object.keys(directMatchXG).length,
+        teamsWithXG: Object.keys(teamXG).length,
+        lineups: lineups.length,
+        standings: standings.length,
       },
 
-      teamXG:
-        historical.teamXG,
+      matches,
+
+      standings,
+
+      teamXG,
+
+      directMatchXG,
+
+      lineups,
 
       diagnostics: {
         apiKeyDetected: true,
-
-        standingsAvailable:
-          standingsResult
-            .standings.length > 0,
-
-        standingsError:
-          standingsResult.error,
-
-        detailErrors,
-
-        historicalErrors:
-          historical.diagnostics,
+        errors: diagnostics.errors,
+        xGSamples: diagnostics.xGSamples,
+        requestBudgetEstimate:
+          2 +
+          (historicalCandidates.length || 0) +
+          (upcoming.length || 0),
+        durationMs: Date.now() - startedAt,
       },
+    };
 
-      matches:
-        enrichedMatches,
-
-      standings:
-        standingsResult.standings,
-    });
+    return res.status(200).json(response);
   } catch (error) {
-    console.error(
-      "SYNC ERROR",
-      error
-    );
+    // ---------------------------------------------------------
+    // 429 — DO NOT RETRY AUTOMATICALLY
+    // ---------------------------------------------------------
+
+    if (error?.status === 429) {
+      return res.status(429).json({
+        ok: false,
+        error: "Big Balls Data rate limit reached.",
+        message:
+          "Wait until Retry-After expires before calling /api/sync again.",
+
+        retryAfter: error.retryAfter,
+
+        diagnostics: {
+          apiKeyDetected: true,
+          status: 429,
+          body: error.body || null,
+          durationMs: Date.now() - startedAt,
+        },
+      });
+    }
 
     return res.status(500).json({
       ok: false,
-
-      error:
-        error?.message ||
-        "Errore durante sincronizzazione BBS",
-
-      generatedAt,
+      error: error?.message || "Unknown sync error",
 
       diagnostics: {
-        apiKeyDetected:
-          Boolean(getApiKey()),
-
-        status:
-          error?.status || null,
-
-        body:
-          typeof error?.body === "string"
-            ? error.body.slice(
-                0,
-                1000
-              )
-            : error?.body || null,
+        apiKeyDetected: true,
+        durationMs: Date.now() - startedAt,
       },
     });
   }
