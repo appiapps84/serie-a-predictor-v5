@@ -19,7 +19,6 @@
       --success: #22c55e;
       --warning: #f59e0b;
       --danger: #ef4444;
-      --white: #ffffff;
     }
 
     * {
@@ -339,6 +338,7 @@
       white-space: pre-wrap;
       word-break: break-word;
       font-size: 13px;
+      margin-bottom: 18px;
     }
 
     .footer {
@@ -420,12 +420,14 @@
   </div>
 
   <section class="panel">
+
     <h2>Seleziona partita</h2>
 
     <div class="selectors">
 
       <div class="field">
         <label for="homeTeam">Squadra casa</label>
+
         <select id="homeTeam">
           <option value="">Caricamento...</option>
         </select>
@@ -435,6 +437,7 @@
 
       <div class="field">
         <label for="awayTeam">Squadra ospite</label>
+
         <select id="awayTeam">
           <option value="">Caricamento...</option>
         </select>
@@ -443,53 +446,88 @@
     </div>
 
     <div class="competition field">
-      <label for="competition">Competizione</label>
+
+      <label for="competition">
+        Competizione
+      </label>
 
       <select id="competition">
         <option value="seriea">Serie A</option>
         <option value="coppa">Coppa</option>
       </select>
+
     </div>
 
     <div class="predict-wrap">
-      <button id="predictButton" class="predict-button" type="button">
+
+      <button
+        id="predictButton"
+        class="predict-button"
+        type="button"
+      >
         📊 Calcola previsione
       </button>
+
     </div>
+
   </section>
 
   <div id="errorBox" class="error-box hidden"></div>
 
   <div id="results" class="hidden">
 
-    <!-- PREVISIONE PRINCIPALE -->
+    <!-- EXPECTED GOALS -->
+
     <section class="panel">
+
       <div class="section-title">
-        <h2>🎯 Previsione principale</h2>
+        <h2>🎯 Expected Goals</h2>
       </div>
 
       <div class="grid grid-2">
 
         <div class="card big-result">
-          <div class="label">Expected Goals Casa</div>
-          <div id="homeXG" class="value">—</div>
+
+          <div class="label">
+            Expected Goals Casa
+          </div>
+
+          <div id="homeXG" class="value">
+            —
+          </div>
+
         </div>
 
         <div class="card big-result">
-          <div class="label">Expected Goals Ospite</div>
-          <div id="awayXG" class="value">—</div>
+
+          <div class="label">
+            Expected Goals Ospite
+          </div>
+
+          <div id="awayXG" class="value">
+            —
+          </div>
+
         </div>
 
       </div>
 
       <div class="info" style="margin-top:15px;">
+
         Fonte modello:
-        <strong id="xgSource">—</strong>
+
+        <strong id="xgSource">
+          —
+        </strong>
+
       </div>
+
     </section>
 
     <!-- 1X2 -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>1X2</h2>
       </div>
@@ -497,25 +535,49 @@
       <div class="probability-grid">
 
         <div class="prob-card">
-          <div class="label">1 — Casa</div>
-          <div id="probHome" class="value">—</div>
+
+          <div class="label">
+            1 — Casa
+          </div>
+
+          <div id="probHome" class="value">
+            —
+          </div>
+
         </div>
 
         <div class="prob-card">
-          <div class="label">X — Pareggio</div>
-          <div id="probDraw" class="value">—</div>
+
+          <div class="label">
+            X — Pareggio
+          </div>
+
+          <div id="probDraw" class="value">
+            —
+          </div>
+
         </div>
 
         <div class="prob-card">
-          <div class="label">2 — Ospite</div>
-          <div id="probAway" class="value">—</div>
+
+          <div class="label">
+            2 — Ospite
+          </div>
+
+          <div id="probAway" class="value">
+            —
+          </div>
+
         </div>
 
       </div>
+
     </section>
 
     <!-- DOPPIA CHANCE -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>Doppia Chance</h2>
       </div>
@@ -538,10 +600,13 @@
         </div>
 
       </div>
+
     </section>
 
     <!-- OVER UNDER -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>⚽ Over / Under</h2>
       </div>
@@ -579,10 +644,13 @@
         </div>
 
       </div>
+
     </section>
 
     <!-- BTTS -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>BTTS — Gol/Gol</h2>
       </div>
@@ -600,10 +668,13 @@
         </div>
 
       </div>
+
     </section>
 
     <!-- HANDICAP -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>Handicap</h2>
       </div>
@@ -611,34 +682,73 @@
       <div class="grid">
 
         <div class="card">
-          <div class="label">Casa -1</div>
-          <div id="handicapHomeMinus1" class="value">—</div>
+
+          <div class="label">
+            Casa -1
+          </div>
+
+          <div
+            id="handicapHomeMinus1"
+            class="value"
+          >
+            —
+          </div>
+
         </div>
 
         <div class="card">
-          <div class="label">Casa +1</div>
-          <div id="handicapHomePlus1" class="value">—</div>
+
+          <div class="label">
+            Casa +1
+          </div>
+
+          <div
+            id="handicapHomePlus1"
+            class="value"
+          >
+            —
+          </div>
+
         </div>
 
         <div class="card">
-          <div class="label">Ospite +1</div>
-          <div id="handicapAwayPlus1" class="value">—</div>
+
+          <div class="label">
+            Ospite +1
+          </div>
+
+          <div
+            id="handicapAwayPlus1"
+            class="value"
+          >
+            —
+          </div>
+
         </div>
 
       </div>
+
     </section>
 
     <!-- RISULTATI ESATTI -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>Risultati esatti più probabili</h2>
       </div>
 
-      <div id="exactScores" class="scores"></div>
+      <div
+        id="exactScores"
+        class="scores"
+      ></div>
+
     </section>
 
     <!-- QUOTE EQUE -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>Quote eque del modello</h2>
       </div>
@@ -676,10 +786,13 @@
         </div>
 
       </div>
+
     </section>
 
     <!-- FATTORI -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>🧠 Fattori utilizzati</h2>
       </div>
@@ -687,1197 +800,2065 @@
       <div class="factor-list">
 
         <div class="factor">
-          <span class="factor-name">xG diretto BBD</span>
-          <span id="factorDirectXG" class="factor-value">—</span>
+          <span class="factor-name">
+            xG diretto BBD
+          </span>
+
+          <span
+            id="factorDirectXG"
+            class="factor-value"
+          >
+            —
+          </span>
         </div>
 
         <div class="factor">
-          <span class="factor-name">Classifica</span>
-          <span id="factorStandings" class="factor-value">—</span>
+          <span class="factor-name">
+            Classifica
+          </span>
+
+          <span
+            id="factorStandings"
+            class="factor-value"
+          >
+            —
+          </span>
         </div>
 
         <div class="factor">
-          <span class="factor-name">Forma recente</span>
-          <span id="factorForm" class="factor-value">—</span>
+          <span class="factor-name">
+            Forma recente
+          </span>
+
+          <span
+            id="factorForm"
+            class="factor-value"
+          >
+            —
+          </span>
         </div>
 
         <div class="factor">
-          <span class="factor-name">Casa / Trasferta</span>
-          <span id="factorHomeAway" class="factor-value">—</span>
+          <span class="factor-name">
+            Casa / Trasferta
+          </span>
+
+          <span
+            id="factorHomeAway"
+            class="factor-value"
+          >
+            —
+          </span>
         </div>
 
         <div class="factor">
-          <span class="factor-name">H2H</span>
-          <span id="factorH2H" class="factor-value">—</span>
+          <span class="factor-name">
+            H2H
+          </span>
+
+          <span
+            id="factorH2H"
+            class="factor-value"
+          >
+            —
+          </span>
         </div>
 
         <div class="factor">
-          <span class="factor-name">Line-up</span>
-          <span id="factorLineups" class="factor-value">—</span>
+          <span class="factor-name">
+            Line-up
+          </span>
+
+          <span
+            id="factorLineups"
+            class="factor-value"
+          >
+            —
+          </span>
         </div>
 
         <div class="factor">
-          <span class="factor-name">Infortuni</span>
-          <span id="factorInjuries" class="factor-value">—</span>
+          <span class="factor-name">
+            Infortuni
+          </span>
+
+          <span
+            id="factorInjuries"
+            class="factor-value"
+          >
+            —
+          </span>
         </div>
 
       </div>
+
     </section>
 
     <!-- H2H -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>🤝 H2H</h2>
       </div>
 
-      <div id="h2hSummary" class="info">
+      <div
+        id="h2hSummary"
+        class="info"
+      >
         Nessun dato H2H disponibile.
       </div>
+
     </section>
 
     <!-- CONFIDENCE -->
+
     <section class="panel">
+
       <div class="section-title">
         <h2>📈 Confidence modello</h2>
       </div>
 
       <div class="card">
-        <div class="label">Affidabilità stimata</div>
-        <div id="confidence" class="value">—</div>
-        <div class="sub">
-          Indicatore interno del modello, non probabilità di successo.
+
+        <div class="label">
+          Affidabilità stimata
         </div>
+
+        <div
+          id="confidence"
+          class="value"
+        >
+          —
+        </div>
+
+        <div class="sub">
+          Indicatore interno del modello,
+          non probabilità di successo.
+        </div>
+
       </div>
+
     </section>
 
   </div>
 
   <div class="footer">
-    Serie A Predictor V5 · Big Balls Sports Data · Poisson + Dixon-Coles
+    Serie A Predictor V5 · Big Balls Sports Data ·
+    Poisson + Dixon-Coles
   </div>
 
 </div>
 
 <script>
-  "use strict";
+"use strict";
 
-  const state = {
-    matches: [],
-    standings: [],
-    teamXG: {},
-    form: {},
-    h2h: {},
-    lineups: [],
-    injuries: [],
-    syncData: null,
-    prediction: null
-  };
+/* =========================================================
+   STATE
+========================================================= */
 
-  const aliases = {
-    "inter milan": "inter",
-    "internazionale": "inter",
-    "como 1907": "como",
-    "as roma": "roma",
-    "ac milan": "milan",
-    "venezia fc": "venezia"
-  };
+const state = {
+  matches: [],
+  standings: [],
+  teamXG: {},
+  form: {},
+  h2h: {},
+  lineups: [],
+  injuries: [],
+  syncData: null,
+  prediction: null
+};
 
-  function normalizeTeamName(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    return aliases[raw] || raw;
+
+/* =========================================================
+   ALIASES
+========================================================= */
+
+const aliases = {
+  "inter milan": "inter",
+  "internazionale": "inter",
+  "como 1907": "como",
+  "as roma": "roma",
+  "ac milan": "milan",
+  "venezia fc": "venezia"
+};
+
+
+/* =========================================================
+   GENERIC HELPERS
+========================================================= */
+
+function normalizeTeamName(value) {
+  if (typeof value === "object" && value !== null) {
+    value =
+      value.name ||
+      value.team_name ||
+      value.teamName ||
+      value.short_name ||
+      value.shortName ||
+      value.display_name ||
+      "";
   }
 
-  function getElement(id) {
-    return document.getElementById(id);
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  return aliases[raw] || raw;
+}
+
+
+function getElement(id) {
+  return document.getElementById(id);
+}
+
+
+function setText(id, value) {
+  const element = getElement(id);
+
+  if (element) {
+    element.textContent = value;
+  }
+}
+
+
+function formatPercent(value) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) {
+    return "—";
   }
 
-  function setText(id, value) {
-    const el = getElement(id);
-    if (el) el.textContent = value;
+  return `${(n * 100).toFixed(1)}%`;
+}
+
+
+function formatOdds(value) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n) || n <= 0) {
+    return "—";
   }
 
-  function formatPercent(value) {
-    const n = Number(value);
+  return n.toFixed(2);
+}
 
-    if (!Number.isFinite(n)) {
-      return "—";
-    }
 
-    return `${(n * 100).toFixed(1)}%`;
+function formatXG(value) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) {
+    return "—";
   }
 
-  function formatOdds(value) {
-    const n = Number(value);
+  return n.toFixed(2);
+}
 
-    if (!Number.isFinite(n) || n <= 0) {
-      return "—";
-    }
 
-    return n.toFixed(2);
+function setStatus(message, type = "") {
+  const element = getElement("status");
+
+  if (!element) {
+    return;
   }
 
-  function formatXG(value) {
-    const n = Number(value);
+  element.textContent = message;
+  element.className = "status";
 
-    if (!Number.isFinite(n)) {
-      return "—";
-    }
+  if (type) {
+    element.classList.add(type);
+  }
+}
 
-    return n.toFixed(2);
+
+function showError(message) {
+  const box = getElement("errorBox");
+
+  if (!box) {
+    return;
   }
 
-  function setStatus(message, type = "") {
-    const el = getElement("status");
+  box.textContent =
+    message ||
+    "Errore sconosciuto.";
 
-    if (!el) return;
+  box.classList.remove("hidden");
+}
 
-    el.textContent = message;
-    el.className = "status";
 
-    if (type) {
-      el.classList.add(type);
-    }
+function hideError() {
+  const box = getElement("errorBox");
+
+  if (!box) {
+    return;
   }
 
-  function showError(message) {
-    const box = getElement("errorBox");
+  box.textContent = "";
+  box.classList.add("hidden");
+}
 
-    if (!box) return;
 
-    box.textContent = message || "Errore sconosciuto.";
-    box.classList.remove("hidden");
+function showResults() {
+  getElement("results")?.classList.remove("hidden");
+}
+
+
+function hideResults() {
+  getElement("results")?.classList.add("hidden");
+}
+
+
+/* =========================================================
+   SAFE TEAM NAME
+========================================================= */
+
+function extractSafeTeamName(value) {
+
+  if (typeof value === "string") {
+    return value.trim();
   }
 
-  function hideError() {
-    const box = getElement("errorBox");
-
-    if (!box) return;
-
-    box.textContent = "";
-    box.classList.add("hidden");
+  if (typeof value === "number") {
+    return String(value);
   }
 
-  function showResults() {
-    getElement("results")?.classList.remove("hidden");
+  if (value && typeof value === "object") {
+
+    return String(
+      value.name ||
+      value.team_name ||
+      value.teamName ||
+      value.short_name ||
+      value.shortName ||
+      value.display_name ||
+      ""
+    ).trim();
   }
 
-  function hideResults() {
-    getElement("results")?.classList.add("hidden");
-  }
+  return "";
+}
 
-  async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
-    const controller = new AbortController();
 
-    const timer = setTimeout(() => {
-      controller.abort();
-    }, timeoutMs);
+/* =========================================================
+   FETCH HELPERS
+========================================================= */
 
-    try {
-      return await fetch(url, {
+async function fetchWithTimeout(
+  url,
+  options = {},
+  timeoutMs = 15000
+) {
+
+  const controller =
+    new AbortController();
+
+  const timer = setTimeout(
+    () => controller.abort(),
+    timeoutMs
+  );
+
+  try {
+
+    return await fetch(
+      url,
+      {
         ...options,
         signal: controller.signal
-      });
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  async function readJson(response) {
-    const text = await response.text();
-
-    let data;
-
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch {
-      throw new Error(
-        `Risposta non JSON dal server. HTTP ${response.status}: ${text.slice(0, 500)}`
-      );
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        data?.message ||
-        data?.error ||
-        `Errore HTTP ${response.status}`
-      );
-    }
-
-    return data;
-  }
-
-  function extractTeamName(match, side) {
-    if (!match) return "";
-
-    if (side === "home") {
-      return (
-        match.home ||
-        match.homeTeam ||
-        match.home_team ||
-        match.home_name ||
-        match.home?.name ||
-        match.teams?.home?.name ||
-        ""
-      );
-    }
-
-    return (
-      match.away ||
-      match.awayTeam ||
-      match.away_team ||
-      match.away_name ||
-      match.away?.name ||
-      match.teams?.away?.name ||
-      ""
-    );
-  }
-
-  function getMatchDate(match) {
-    return (
-      match?.kickoff_utc ||
-      match?.kickoff ||
-      match?.date ||
-      match?.start_time ||
-      match?.startTime ||
-      ""
-    );
-  }
-
-  function getMatchScore(match) {
-    return (
-      match?.score ||
-      match?.result ||
-      match?.scores ||
-      null
-    );
-  }
-
-  function getMatchId(match) {
-    return (
-      match?.id ||
-      match?.match_id ||
-      match?.fixture_id ||
-      null
-    );
-  }
-
-  function normalizeMatch(match) {
-    return {
-      id: getMatchId(match),
-      home: extractTeamName(match, "home"),
-      away: extractTeamName(match, "away"),
-      kickoff_utc: getMatchDate(match),
-      status: match?.status || "",
-      score: getMatchScore(match),
-      xG: match?.xG ?? match?.xg ?? null
-    };
-  }
-
-  function getAvailableTeams(matches) {
-    const names = new Set();
-
-    for (const rawMatch of matches || []) {
-      const match = normalizeMatch(rawMatch);
-
-      if (match.home) names.add(match.home);
-      if (match.away) names.add(match.away);
-    }
-
-    return Array.from(names).sort((a, b) =>
-      a.localeCompare(b, "it")
-    );
-  }
-
-  function populateTeams() {
-    const homeSelect = getElement("homeTeam");
-    const awaySelect = getElement("awayTeam");
-
-    if (!homeSelect || !awaySelect) return;
-
-    const teams = getAvailableTeams(state.matches);
-
-    homeSelect.innerHTML = "";
-    awaySelect.innerHTML = "";
-
-    if (teams.length === 0) {
-      homeSelect.innerHTML =
-        '<option value="">Nessuna squadra disponibile</option>';
-
-      awaySelect.innerHTML =
-        '<option value="">Nessuna squadra disponibile</option>';
-
-      return;
-    }
-
-    const emptyHome = document.createElement("option");
-    emptyHome.value = "";
-    emptyHome.textContent = "Seleziona squadra";
-    homeSelect.appendChild(emptyHome);
-
-    const emptyAway = document.createElement("option");
-    emptyAway.value = "";
-    emptyAway.textContent = "Seleziona squadra";
-    awaySelect.appendChild(emptyAway);
-
-    for (const team of teams) {
-      const optionHome = document.createElement("option");
-      optionHome.value = team;
-      optionHome.textContent = team;
-      homeSelect.appendChild(optionHome);
-
-      const optionAway = document.createElement("option");
-      optionAway.value = team;
-      optionAway.textContent = team;
-      awaySelect.appendChild(optionAway);
-    }
-
-    if (teams.length >= 2) {
-      homeSelect.value = teams[0];
-      awaySelect.value = teams[1];
-    }
-  }
-
-  function findMatch(homeTeam, awayTeam) {
-    const homeWanted = normalizeTeamName(homeTeam);
-    const awayWanted = normalizeTeamName(awayTeam);
-
-    return state.matches.find(rawMatch => {
-      const match = normalizeMatch(rawMatch);
-
-      return (
-        normalizeTeamName(match.home) === homeWanted &&
-        normalizeTeamName(match.away) === awayWanted
-      );
-    }) || null;
-  }
-
-  function findTeamForm(teamName) {
-    const wanted = normalizeTeamName(teamName);
-
-    if (!state.form || typeof state.form !== "object") {
-      return null;
-    }
-
-    for (const [key, value] of Object.entries(state.form)) {
-      const keyNormalized = normalizeTeamName(key);
-      const valueTeam = normalizeTeamName(value?.team);
-
-      if (
-        keyNormalized === wanted ||
-        valueTeam === wanted
-      ) {
-        return value;
       }
+    );
+
+  } finally {
+
+    clearTimeout(timer);
+  }
+}
+
+
+async function readJson(response) {
+
+  const text =
+    await response.text();
+
+  let data;
+
+  try {
+
+    data =
+      text
+        ? JSON.parse(text)
+        : {};
+
+  } catch {
+
+    throw new Error(
+      `Risposta non JSON dal server. HTTP ${response.status}: ${text.slice(0, 500)}`
+    );
+  }
+
+  if (!response.ok) {
+
+    throw new Error(
+      data?.message ||
+      data?.error ||
+      `Errore HTTP ${response.status}`
+    );
+  }
+
+  return data;
+}
+
+
+/* =========================================================
+   MATCH PARSING
+========================================================= */
+
+function extractTeamName(match, side) {
+
+  if (!match) {
+    return "";
+  }
+
+  let value;
+
+  if (side === "home") {
+
+    value =
+      match.home ??
+      match.homeTeam ??
+      match.home_team ??
+      match.home_name ??
+      match.teams?.home?.name ??
+      match.teams?.home ??
+      "";
+
+  } else {
+
+    value =
+      match.away ??
+      match.awayTeam ??
+      match.away_team ??
+      match.away_name ??
+      match.teams?.away?.name ??
+      match.teams?.away ??
+      "";
+  }
+
+  return extractSafeTeamName(value);
+}
+
+
+function getMatchDate(match) {
+
+  return (
+    match?.kickoff_utc ||
+    match?.kickoff ||
+    match?.date ||
+    match?.start_time ||
+    match?.startTime ||
+    ""
+  );
+}
+
+
+function getMatchScore(match) {
+
+  return (
+    match?.score ||
+    match?.result ||
+    match?.scores ||
+    null
+  );
+}
+
+
+function getMatchId(match) {
+
+  return (
+    match?.id ||
+    match?.match_id ||
+    match?.fixture_id ||
+    null
+  );
+}
+
+
+function normalizeMatch(match) {
+
+  return {
+    id: getMatchId(match),
+
+    home: extractTeamName(
+      match,
+      "home"
+    ),
+
+    away: extractTeamName(
+      match,
+      "away"
+    ),
+
+    kickoff_utc:
+      getMatchDate(match),
+
+    status:
+      match?.status || "",
+
+    score:
+      getMatchScore(match),
+
+    xG:
+      match?.xG ??
+      match?.xg ??
+      null
+  };
+}
+
+
+/* =========================================================
+   TEAM LIST
+========================================================= */
+
+function getAvailableTeams(matches) {
+
+  const names =
+    new Set();
+
+  for (
+    const rawMatch of matches || []
+  ) {
+
+    const match =
+      normalizeMatch(rawMatch);
+
+    const home =
+      extractSafeTeamName(
+        match.home
+      );
+
+    const away =
+      extractSafeTeamName(
+        match.away
+      );
+
+    if (home) {
+      names.add(home);
     }
 
+    if (away) {
+      names.add(away);
+    }
+  }
+
+  return Array.from(names)
+    .map(value =>
+      String(value).trim()
+    )
+    .filter(Boolean)
+    .sort((a, b) => {
+
+      return String(a)
+        .localeCompare(
+          String(b),
+          "it"
+        );
+    });
+}
+
+
+function populateTeams() {
+
+  const homeSelect =
+    getElement("homeTeam");
+
+  const awaySelect =
+    getElement("awayTeam");
+
+  if (!homeSelect || !awaySelect) {
+    return;
+  }
+
+  const teams =
+    getAvailableTeams(
+      state.matches
+    );
+
+  homeSelect.innerHTML = "";
+  awaySelect.innerHTML = "";
+
+  if (teams.length === 0) {
+
+    homeSelect.innerHTML =
+      '<option value="">Nessuna squadra disponibile</option>';
+
+    awaySelect.innerHTML =
+      '<option value="">Nessuna squadra disponibile</option>';
+
+    return;
+  }
+
+  const emptyHome =
+    document.createElement("option");
+
+  emptyHome.value = "";
+  emptyHome.textContent =
+    "Seleziona squadra";
+
+  homeSelect.appendChild(
+    emptyHome
+  );
+
+  const emptyAway =
+    document.createElement("option");
+
+  emptyAway.value = "";
+  emptyAway.textContent =
+    "Seleziona squadra";
+
+  awaySelect.appendChild(
+    emptyAway
+  );
+
+  for (const team of teams) {
+
+    const optionHome =
+      document.createElement("option");
+
+    optionHome.value = team;
+    optionHome.textContent = team;
+
+    homeSelect.appendChild(
+      optionHome
+    );
+
+
+    const optionAway =
+      document.createElement("option");
+
+    optionAway.value = team;
+    optionAway.textContent = team;
+
+    awaySelect.appendChild(
+      optionAway
+    );
+  }
+
+  if (teams.length >= 2) {
+
+    homeSelect.value =
+      teams[0];
+
+    awaySelect.value =
+      teams[1];
+  }
+}
+
+
+/* =========================================================
+   MATCH / FORM / H2H
+========================================================= */
+
+function findMatch(
+  homeTeam,
+  awayTeam
+) {
+
+  const homeWanted =
+    normalizeTeamName(homeTeam);
+
+  const awayWanted =
+    normalizeTeamName(awayTeam);
+
+  return (
+    state.matches.find(
+      rawMatch => {
+
+        const match =
+          normalizeMatch(rawMatch);
+
+        return (
+          normalizeTeamName(
+            match.home
+          ) === homeWanted &&
+          normalizeTeamName(
+            match.away
+          ) === awayWanted
+        );
+      }
+    ) || null
+  );
+}
+
+
+function findTeamForm(teamName) {
+
+  const wanted =
+    normalizeTeamName(
+      teamName
+    );
+
+  if (
+    !state.form ||
+    typeof state.form !== "object"
+  ) {
     return null;
   }
 
-  function getH2HKey(homeTeam, awayTeam) {
-    const home = normalizeTeamName(homeTeam);
-    const away = normalizeTeamName(awayTeam);
+  for (
+    const [
+      key,
+      value
+    ] of Object.entries(
+      state.form
+    )
+  ) {
 
-    return home < away
-      ? `${home}__${away}`
-      : `${away}__${home}`;
+    const keyNormalized =
+      normalizeTeamName(key);
+
+    const valueTeam =
+      normalizeTeamName(
+        value?.team
+      );
+
+    if (
+      keyNormalized === wanted ||
+      valueTeam === wanted
+    ) {
+      return value;
+    }
   }
 
-  function findH2H(homeTeam, awayTeam) {
-    const key = getH2HKey(homeTeam, awayTeam);
+  return null;
+}
 
-    if (!state.h2h || typeof state.h2h !== "object") {
-      return [];
-    }
 
-    return Array.isArray(state.h2h[key])
-      ? state.h2h[key]
-      : [];
+function getH2HKey(
+  homeTeam,
+  awayTeam
+) {
+
+  const home =
+    normalizeTeamName(
+      homeTeam
+    );
+
+  const away =
+    normalizeTeamName(
+      awayTeam
+    );
+
+  return home < away
+    ? `${home}__${away}`
+    : `${away}__${home}`;
+}
+
+
+function findH2H(
+  homeTeam,
+  awayTeam
+) {
+
+  const key =
+    getH2HKey(
+      homeTeam,
+      awayTeam
+    );
+
+  if (
+    !state.h2h ||
+    typeof state.h2h !== "object"
+  ) {
+    return [];
   }
 
-  function getSelectedFormPayload(homeTeam, awayTeam) {
-    const homeForm = findTeamForm(homeTeam);
-    const awayForm = findTeamForm(awayTeam);
+  return Array.isArray(
+    state.h2h[key]
+  )
+    ? state.h2h[key]
+    : [];
+}
 
-    const payload = {};
 
-    if (homeForm) {
-      payload[normalizeTeamName(homeTeam)] = homeForm;
-    }
+function getSelectedFormPayload(
+  homeTeam,
+  awayTeam
+) {
 
-    if (awayForm) {
-      payload[normalizeTeamName(awayTeam)] = awayForm;
-    }
+  const homeForm =
+    findTeamForm(
+      homeTeam
+    );
 
-    return payload;
+  const awayForm =
+    findTeamForm(
+      awayTeam
+    );
+
+  const payload = {};
+
+  if (homeForm) {
+
+    payload[
+      normalizeTeamName(
+        homeTeam
+      )
+    ] = homeForm;
   }
 
-  function getSelectedH2HPayload(homeTeam, awayTeam) {
-    const key = getH2HKey(homeTeam, awayTeam);
-    const matches = findH2H(homeTeam, awayTeam);
+  if (awayForm) {
 
-    if (!matches.length) {
-      return {};
-    }
-
-    return {
-      [key]: matches
-    };
+    payload[
+      normalizeTeamName(
+        awayTeam
+      )
+    ] = awayForm;
   }
 
-  function findDirectXG(match) {
-    if (!match) return null;
+  return payload;
+}
 
-    const xg = match.xG;
 
-    if (!xg || typeof xg !== "object") {
-      return null;
-    }
+function getSelectedH2HPayload(
+  homeTeam,
+  awayTeam
+) {
 
-    const home = Number(
+  const key =
+    getH2HKey(
+      homeTeam,
+      awayTeam
+    );
+
+  const matches =
+    findH2H(
+      homeTeam,
+      awayTeam
+    );
+
+  if (!matches.length) {
+    return {};
+  }
+
+  return {
+    [key]: matches
+  };
+}
+
+
+/* =========================================================
+   XG
+========================================================= */
+
+function findDirectXG(match) {
+
+  if (!match) {
+    return null;
+  }
+
+  const xg =
+    match.xG;
+
+  if (
+    !xg ||
+    typeof xg !== "object"
+  ) {
+    return null;
+  }
+
+  const home =
+    Number(
       xg.homeXG ??
       xg.home ??
       xg.home_xg ??
       xg.home_xG
     );
 
-    const away = Number(
+  const away =
+    Number(
       xg.awayXG ??
       xg.away ??
       xg.away_xg ??
       xg.away_xG
     );
 
-    if (
-      Number.isFinite(home) &&
-      Number.isFinite(away)
-    ) {
-      return {
-        home,
-        away
-      };
-    }
+  if (
+    Number.isFinite(home) &&
+    Number.isFinite(away)
+  ) {
 
+    return {
+      home,
+      away
+    };
+  }
+
+  return null;
+}
+
+
+function getTeamXG(teamName) {
+
+  const wanted =
+    normalizeTeamName(
+      teamName
+    );
+
+  if (
+    !state.teamXG ||
+    typeof state.teamXG !== "object"
+  ) {
     return null;
   }
 
-  function getTeamXG(teamName) {
-    const wanted = normalizeTeamName(teamName);
+  for (
+    const [
+      key,
+      value
+    ] of Object.entries(
+      state.teamXG
+    )
+  ) {
 
-    if (!state.teamXG || typeof state.teamXG !== "object") {
-      return null;
-    }
+    if (
+      normalizeTeamName(key) ===
+      wanted
+    ) {
 
-    for (const [key, value] of Object.entries(state.teamXG)) {
-      if (normalizeTeamName(key) === wanted) {
-        return Number(value);
+      const numberValue =
+        Number(value);
+
+      if (
+        Number.isFinite(
+          numberValue
+        )
+      ) {
+        return numberValue;
       }
     }
-
-    return null;
   }
 
-  function buildPredictionPayload() {
-    const homeTeam = getElement("homeTeam")?.value?.trim();
-    const awayTeam = getElement("awayTeam")?.value?.trim();
-    const competition = getElement("competition")?.value || "seriea";
+  return null;
+}
 
-    const match = findMatch(homeTeam, awayTeam);
 
-    const directXG = findDirectXG(match);
+/* =========================================================
+   PREDICTION PAYLOAD
+========================================================= */
 
-    const payload = {
+function buildPredictionPayload() {
+
+  const homeTeam =
+    getElement(
+      "homeTeam"
+    )?.value?.trim();
+
+  const awayTeam =
+    getElement(
+      "awayTeam"
+    )?.value?.trim();
+
+  const competition =
+    getElement(
+      "competition"
+    )?.value ||
+    "seriea";
+
+  const match =
+    findMatch(
       homeTeam,
-      awayTeam,
-      competition,
+      awayTeam
+    );
 
-      match: match
+  const directXG =
+    findDirectXG(match);
+
+  return {
+
+    homeTeam,
+
+    awayTeam,
+
+    competition,
+
+    match:
+      match
         ? {
             id: match.id,
             home: match.home,
             away: match.away,
-            kickoff_utc: match.kickoff_utc,
-            status: match.status,
-            score: match.score,
-            xG: directXG
+            kickoff_utc:
+              match.kickoff_utc,
+            status:
+              match.status,
+            score:
+              match.score,
+            xG:
+              directXG
           }
         : null,
 
-      homeXG: directXG?.home ?? getTeamXG(homeTeam),
-      awayXG: directXG?.away ?? getTeamXG(awayTeam),
+    homeXG:
+      directXG?.home ??
+      getTeamXG(homeTeam),
 
-      standings: Array.isArray(state.standings)
+    awayXG:
+      directXG?.away ??
+      getTeamXG(awayTeam),
+
+    standings:
+      Array.isArray(
+        state.standings
+      )
         ? state.standings
         : [],
 
-      form: getSelectedFormPayload(
+    form:
+      getSelectedFormPayload(
         homeTeam,
         awayTeam
       ),
 
-      h2h: getSelectedH2HPayload(
+    h2h:
+      getSelectedH2HPayload(
         homeTeam,
         awayTeam
       ),
 
-      lineups: Array.isArray(state.lineups)
+    lineups:
+      Array.isArray(
+        state.lineups
+      )
         ? state.lineups
         : [],
 
-      injuries: Array.isArray(state.injuries)
+    injuries:
+      Array.isArray(
+        state.injuries
+      )
         ? state.injuries
         : []
-    };
+  };
+}
 
-    return payload;
+
+/* =========================================================
+   SYNC
+========================================================= */
+
+async function syncData() {
+
+  const button =
+    getElement(
+      "syncButton"
+    );
+
+  hideError();
+
+  if (button) {
+    button.disabled = true;
   }
 
-  async function syncData() {
-    const button = getElement("syncButton");
+  setStatus(
+    "Sincronizzazione con Big Balls Data...",
+    "loading"
+  );
 
-    hideError();
+  try {
 
-    if (button) {
-      button.disabled = true;
-    }
-
-    setStatus("Sincronizzazione con Big Balls Data...", "loading");
-
-    try {
-      const response = await fetchWithTimeout(
+    const response =
+      await fetchWithTimeout(
         "/api/sync",
         {
           method: "GET",
           headers: {
-            "Accept": "application/json"
+            "Accept":
+              "application/json"
           }
         },
         15000
       );
 
-      const data = await readJson(response);
+    const data =
+      await readJson(
+        response
+      );
 
-      if (!data.ok) {
-        throw new Error(
-          data.message ||
-          data.error ||
-          "Sincronizzazione non riuscita."
-        );
-      }
+    if (!data.ok) {
 
-      state.syncData = data;
-      state.matches = Array.isArray(data.matches)
+      throw new Error(
+        data.message ||
+        data.error ||
+        "Sincronizzazione non riuscita."
+      );
+    }
+
+    state.syncData =
+      data;
+
+    state.matches =
+      Array.isArray(
+        data.matches
+      )
         ? data.matches
         : [];
 
-      state.standings = Array.isArray(data.standings)
+    state.standings =
+      Array.isArray(
+        data.standings
+      )
         ? data.standings
         : [];
 
-      state.teamXG =
-        data.teamXG &&
-        typeof data.teamXG === "object"
-          ? data.teamXG
-          : {};
+    state.teamXG =
+      data.teamXG &&
+      typeof data.teamXG === "object"
+        ? data.teamXG
+        : {};
 
-      state.form =
-        data.form &&
-        typeof data.form === "object"
-          ? data.form
-          : {};
+    state.form =
+      data.form &&
+      typeof data.form === "object"
+        ? data.form
+        : {};
 
-      state.h2h =
-        data.h2h &&
-        typeof data.h2h === "object"
-          ? data.h2h
-          : {};
+    state.h2h =
+      data.h2h &&
+      typeof data.h2h === "object"
+        ? data.h2h
+        : {};
 
-      state.lineups = Array.isArray(data.lineups)
+    state.lineups =
+      Array.isArray(
+        data.lineups
+      )
         ? data.lineups
         : [];
 
-      state.injuries = Array.isArray(data.injuries)
+    state.injuries =
+      Array.isArray(
+        data.injuries
+      )
         ? data.injuries
         : [];
 
-      populateTeams();
+    populateTeams();
 
-      const coverage = data.coverage || {};
-
-      setStatus(
-        `BBD OK · ${coverage.matches ?? state.matches.length} partite · ` +
-        `${coverage.storedFinishedMatches ?? 0} storiche · ` +
-        `${coverage.teamsWithForm ?? 0} squadre con forma · ` +
-        `${coverage.h2hPairs ?? 0} H2H`,
-        "success"
-      );
-
-      hideResults();
-
-    } catch (error) {
-      console.error("SYNC ERROR:", error);
-
-      setStatus(
-        "Errore durante la sincronizzazione.",
-        "error"
-      );
-
-      showError(
-        `SYNC ERROR:\n${error?.message || error}`
-      );
-
-    } finally {
-      if (button) {
-        button.disabled = false;
-      }
-    }
-  }
-
-  async function predict() {
-    hideError();
-
-    const homeTeam = getElement("homeTeam")?.value?.trim();
-    const awayTeam = getElement("awayTeam")?.value?.trim();
-
-    if (!homeTeam || !awayTeam) {
-      showError(
-        "Seleziona sia la squadra casa sia la squadra ospite."
-      );
-      return;
-    }
-
-    if (
-      normalizeTeamName(homeTeam) ===
-      normalizeTeamName(awayTeam)
-    ) {
-      showError(
-        "Le due squadre devono essere diverse."
-      );
-      return;
-    }
-
-    if (!state.syncData) {
-      showError(
-        "Prima devi sincronizzare i dati BBD."
-      );
-      return;
-    }
-
-    const button = getElement("predictButton");
-
-    if (button) {
-      button.disabled = true;
-    }
+    const coverage =
+      data.coverage ||
+      {};
 
     setStatus(
-      `Calcolo previsione: ${homeTeam} - ${awayTeam}...`,
-      "loading"
+      `BBD OK · ${
+        coverage.matches ??
+        state.matches.length
+      } partite · ${
+        coverage.storedFinishedMatches ??
+        0
+      } storiche · ${
+        coverage.teamsWithForm ??
+        0
+      } squadre con forma · ${
+        coverage.h2hPairs ??
+        0
+      } H2H`,
+      "success"
     );
 
-    try {
-      const payload = buildPredictionPayload();
+    hideResults();
 
-      console.log("PREDICTION PAYLOAD:", payload);
+  } catch (error) {
 
-      const response = await fetchWithTimeout(
+    console.error(
+      "SYNC ERROR:",
+      error
+    );
+
+    setStatus(
+      "Errore durante la sincronizzazione.",
+      "error"
+    );
+
+    showError(
+      `SYNC ERROR:\n${
+        error?.message ||
+        error
+      }`
+    );
+
+  } finally {
+
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
+
+/* =========================================================
+   PREDICT
+========================================================= */
+
+async function predict() {
+
+  hideError();
+
+  const homeTeam =
+    getElement(
+      "homeTeam"
+    )?.value?.trim();
+
+  const awayTeam =
+    getElement(
+      "awayTeam"
+    )?.value?.trim();
+
+  if (!homeTeam || !awayTeam) {
+
+    showError(
+      "Seleziona sia la squadra casa sia la squadra ospite."
+    );
+
+    return;
+  }
+
+  if (
+    normalizeTeamName(
+      homeTeam
+    ) ===
+    normalizeTeamName(
+      awayTeam
+    )
+  ) {
+
+    showError(
+      "Le due squadre devono essere diverse."
+    );
+
+    return;
+  }
+
+  if (!state.syncData) {
+
+    showError(
+      "Prima devi sincronizzare i dati BBD."
+    );
+
+    return;
+  }
+
+  const button =
+    getElement(
+      "predictButton"
+    );
+
+  if (button) {
+    button.disabled = true;
+  }
+
+  setStatus(
+    `Calcolo previsione: ${homeTeam} - ${awayTeam}...`,
+    "loading"
+  );
+
+  try {
+
+    const payload =
+      buildPredictionPayload();
+
+    console.log(
+      "PREDICTION PAYLOAD:",
+      payload
+    );
+
+    const response =
+      await fetchWithTimeout(
         "/api/predict",
         {
           method: "POST",
+
           headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Content-Type":
+              "application/json",
+
+            "Accept":
+              "application/json"
           },
-          body: JSON.stringify(payload)
+
+          body:
+            JSON.stringify(
+              payload
+            )
         },
         10000
       );
 
-      const data = await readJson(response);
-
-      if (!data.ok) {
-        throw new Error(
-          data.message ||
-          data.error ||
-          "La previsione non è stata calcolata."
-        );
-      }
-
-      state.prediction = data;
-
-      renderPrediction(data);
-
-      showResults();
-
-      setStatus(
-        `Previsione calcolata · ${homeTeam} vs ${awayTeam}`,
-        "success"
+    const data =
+      await readJson(
+        response
       );
 
-      window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: "smooth"
-      });
+    if (!data.ok) {
 
-    } catch (error) {
-      console.error("PREDICT ERROR:", error);
+      throw new Error(
+        data.message ||
+        data.error ||
+        "La previsione non è stata calcolata."
+      );
+    }
 
-      setStatus(
-        "Errore durante il calcolo della previsione.",
-        "error"
+    state.prediction =
+      data;
+
+    renderPrediction(
+      data
+    );
+
+    showResults();
+
+    setStatus(
+      `Previsione calcolata · ${homeTeam} vs ${awayTeam}`,
+      "success"
+    );
+
+    window.scrollTo({
+      top:
+        document.body.scrollHeight,
+      behavior:
+        "smooth"
+    });
+
+  } catch (error) {
+
+    console.error(
+      "PREDICT ERROR:",
+      error
+    );
+
+    setStatus(
+      "Errore durante il calcolo della previsione.",
+      "error"
+    );
+
+    showError(
+      `PREDICT ERROR:\n${
+        error?.message ||
+        error
+      }`
+    );
+
+  } finally {
+
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
+
+/* =========================================================
+   RENDER PREDICTION
+========================================================= */
+
+function renderPrediction(data) {
+
+  const expected =
+    data.expectedGoals ||
+    {};
+
+  const inputXG =
+    data.inputXG ||
+    {};
+
+  setText(
+    "homeXG",
+    formatXG(
+      expected.home ??
+      inputXG.home
+    )
+  );
+
+  setText(
+    "awayXG",
+    formatXG(
+      expected.away ??
+      inputXG.away
+    )
+  );
+
+  setText(
+    "xgSource",
+    data.xgSource ||
+    "Modello multi-fattore"
+  );
+
+
+  /* 1X2 */
+
+  const probabilities =
+    data.probabilities ||
+    {};
+
+  setText(
+    "probHome",
+    formatPercent(
+      probabilities.home
+    )
+  );
+
+  setText(
+    "probDraw",
+    formatPercent(
+      probabilities.draw
+    )
+  );
+
+  setText(
+    "probAway",
+    formatPercent(
+      probabilities.away
+    )
+  );
+
+
+  /* DOUBLE CHANCE */
+
+  const doubleChance =
+    data.doubleChance ||
+    {};
+
+  setText(
+    "double1X",
+    formatPercent(
+      doubleChance["1X"]
+    )
+  );
+
+  setText(
+    "doubleX2",
+    formatPercent(
+      doubleChance["X2"]
+    )
+  );
+
+  setText(
+    "double12",
+    formatPercent(
+      doubleChance["12"]
+    )
+  );
+
+
+  /* OVER UNDER */
+
+  const ou =
+    data.overUnder ||
+    data.over_under ||
+    {};
+
+  setText(
+    "over15",
+    formatPercent(
+      ou.over15 ??
+      ou["1.5"]?.over ??
+      ou["O1.5"]
+    )
+  );
+
+  setText(
+    "under15",
+    formatPercent(
+      ou.under15 ??
+      ou["1.5"]?.under ??
+      ou["U1.5"]
+    )
+  );
+
+  setText(
+    "over25",
+    formatPercent(
+      ou.over25 ??
+      ou["2.5"]?.over ??
+      ou["O2.5"]
+    )
+  );
+
+  setText(
+    "under25",
+    formatPercent(
+      ou.under25 ??
+      ou["2.5"]?.under ??
+      ou["U2.5"]
+    )
+  );
+
+  setText(
+    "over35",
+    formatPercent(
+      ou.over35 ??
+      ou["3.5"]?.over ??
+      ou["O3.5"]
+    )
+  );
+
+  setText(
+    "under35",
+    formatPercent(
+      ou.under35 ??
+      ou["3.5"]?.under ??
+      ou["U3.5"]
+    )
+  );
+
+
+  /* BTTS */
+
+  const btts =
+    data.btts ||
+    {};
+
+  setText(
+    "bttsYes",
+    formatPercent(
+      btts.yes
+    )
+  );
+
+  setText(
+    "bttsNo",
+    formatPercent(
+      btts.no
+    )
+  );
+
+
+  /* HANDICAP */
+
+  const handicap =
+    data.handicap ||
+    data.handicaps ||
+    {};
+
+  setText(
+    "handicapHomeMinus1",
+    formatPercent(
+      handicap.homeMinus1 ??
+      handicap["-1"]?.home ??
+      handicap.home?.minus1
+    )
+  );
+
+  setText(
+    "handicapHomePlus1",
+    formatPercent(
+      handicap.homePlus1 ??
+      handicap["+1"]?.home ??
+      handicap.home?.plus1
+    )
+  );
+
+  setText(
+    "handicapAwayPlus1",
+    formatPercent(
+      handicap.awayPlus1 ??
+      handicap["+1"]?.away ??
+      handicap.away?.plus1
+    )
+  );
+
+
+  /* EXACT SCORES */
+
+  renderExactScores(
+    data.exactScores ||
+    data.exact_scores ||
+    []
+  );
+
+
+  /* FAIR ODDS */
+
+  renderFairOdds(
+    data.fairOdds ||
+    data.fair_odds ||
+    {}
+  );
+
+
+  /* FACTORS */
+
+  renderFactors(
+    data
+  );
+
+
+  /* H2H */
+
+  renderH2H(
+    data
+  );
+
+
+  /* CONFIDENCE */
+
+  setText(
+    "confidence",
+
+    Number.isFinite(
+      Number(data.confidence)
+    )
+      ? `${Number(
+          data.confidence
+        ).toFixed(0)}%`
+      : "—"
+  );
+}
+
+
+/* =========================================================
+   EXACT SCORES
+========================================================= */
+
+function renderExactScores(
+  scores
+) {
+
+  const container =
+    getElement(
+      "exactScores"
+    );
+
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = "";
+
+  if (
+    !Array.isArray(scores) ||
+    scores.length === 0
+  ) {
+
+    container.innerHTML =
+      '<div class="info">Nessun risultato esatto disponibile.</div>';
+
+    return;
+  }
+
+  for (
+    const item of scores.slice(
+      0,
+      10
+    )
+  ) {
+
+    const card =
+      document.createElement(
+        "div"
       );
 
-      showError(
-        `PREDICT ERROR:\n${error?.message || error}`
+    card.className =
+      "score-card";
+
+    const score =
+      document.createElement(
+        "div"
       );
 
-    } finally {
-      if (button) {
-        button.disabled = false;
-      }
-    }
-  }
+    score.className =
+      "score";
 
-  function renderPrediction(data) {
-    const expected = data.expectedGoals || {};
-    const inputXG = data.inputXG || {};
+    score.textContent =
+      item.score ||
+      "—";
 
-    setText(
-      "homeXG",
-      formatXG(
-        expected.home ??
-        inputXG.home
-      )
-    );
+    const prob =
+      document.createElement(
+        "div"
+      );
 
-    setText(
-      "awayXG",
-      formatXG(
-        expected.away ??
-        inputXG.away
-      )
-    );
+    prob.className =
+      "prob";
 
-    setText(
-      "xgSource",
-      data.xgSource || "Modello multi-fattore"
-    );
-
-    const probabilities =
-      data.probabilities || {};
-
-    setText(
-      "probHome",
-      formatPercent(probabilities.home)
-    );
-
-    setText(
-      "probDraw",
-      formatPercent(probabilities.draw)
-    );
-
-    setText(
-      "probAway",
-      formatPercent(probabilities.away)
-    );
-
-    const doubleChance =
-      data.doubleChance || {};
-
-    setText(
-      "double1X",
-      formatPercent(doubleChance["1X"])
-    );
-
-    setText(
-      "doubleX2",
-      formatPercent(doubleChance["X2"])
-    );
-
-    setText(
-      "double12",
-      formatPercent(doubleChance["12"])
-    );
-
-    const ou =
-      data.overUnder ||
-      data.over_under ||
-      {};
-
-    setText(
-      "over15",
+    prob.textContent =
       formatPercent(
-        ou.over15 ??
-        ou["1.5"]?.over ??
-        ou["O1.5"]
-      )
+        item.probability
+      );
+
+    card.appendChild(
+      score
     );
 
-    setText(
-      "under15",
-      formatPercent(
-        ou.under15 ??
-        ou["1.5"]?.under ??
-        ou["U1.5"]
-      )
+    card.appendChild(
+      prob
     );
 
-    setText(
-      "over25",
-      formatPercent(
-        ou.over25 ??
-        ou["2.5"]?.over ??
-        ou["O2.5"]
-      )
-    );
-
-    setText(
-      "under25",
-      formatPercent(
-        ou.under25 ??
-        ou["2.5"]?.under ??
-        ou["U2.5"]
-      )
-    );
-
-    setText(
-      "over35",
-      formatPercent(
-        ou.over35 ??
-        ou["3.5"]?.over ??
-        ou["O3.5"]
-      )
-    );
-
-    setText(
-      "under35",
-      formatPercent(
-        ou.under35 ??
-        ou["3.5"]?.under ??
-        ou["U3.5"]
-      )
-    );
-
-    const btts =
-      data.btts || {};
-
-    setText(
-      "bttsYes",
-      formatPercent(btts.yes)
-    );
-
-    setText(
-      "bttsNo",
-      formatPercent(btts.no)
-    );
-
-    const handicap =
-      data.handicap ||
-      data.handicaps ||
-      {};
-
-    setText(
-      "handicapHomeMinus1",
-      formatPercent(
-        handicap.homeMinus1 ??
-        handicap["-1"]?.home ??
-        handicap.home?.minus1
-      )
-    );
-
-    setText(
-      "handicapHomePlus1",
-      formatPercent(
-        handicap.homePlus1 ??
-        handicap["+1"]?.home ??
-        handicap.home?.plus1
-      )
-    );
-
-    setText(
-      "handicapAwayPlus1",
-      formatPercent(
-        handicap.awayPlus1 ??
-        handicap["+1"]?.away ??
-        handicap.away?.plus1
-      )
-    );
-
-    renderExactScores(
-      data.exactScores ||
-      data.exact_scores ||
-      []
-    );
-
-    renderFairOdds(
-      data.fairOdds ||
-      data.fair_odds ||
-      {}
-    );
-
-    renderFactors(data);
-
-    renderH2H(data);
-
-    setText(
-      "confidence",
-      Number.isFinite(Number(data.confidence))
-        ? `${Number(data.confidence).toFixed(0)}%`
-        : "—"
+    container.appendChild(
+      card
     );
   }
+}
 
-  function renderExactScores(scores) {
-    const container = getElement("exactScores");
 
-    if (!container) return;
+/* =========================================================
+   FAIR ODDS
+========================================================= */
 
-    container.innerHTML = "";
+function renderFairOdds(
+  odds
+) {
 
-    if (!Array.isArray(scores) || scores.length === 0) {
-      container.innerHTML =
-        '<div class="info">Nessun risultato esatto disponibile.</div>';
-      return;
-    }
+  setText(
+    "fairHome",
+    formatOdds(
+      odds.home
+    )
+  );
 
-    for (const item of scores.slice(0, 10)) {
-      const card = document.createElement("div");
+  setText(
+    "fairDraw",
+    formatOdds(
+      odds.draw
+    )
+  );
 
-      card.className = "score-card";
+  setText(
+    "fairAway",
+    formatOdds(
+      odds.away
+    )
+  );
 
-      const score = document.createElement("div");
-      score.className = "score";
-      score.textContent = item.score || "—";
+  setText(
+    "fairOver25",
+    formatOdds(
+      odds.over25
+    )
+  );
 
-      const prob = document.createElement("div");
-      prob.className = "prob";
-      prob.textContent =
-        formatPercent(item.probability);
+  setText(
+    "fairUnder25",
+    formatOdds(
+      odds.under25
+    )
+  );
 
-      card.appendChild(score);
-      card.appendChild(prob);
+  setText(
+    "fairBttsYes",
+    formatOdds(
+      odds.bttsYes
+    )
+  );
+}
 
-      container.appendChild(card);
-    }
+
+/* =========================================================
+   FACTORS
+========================================================= */
+
+function renderFactors(
+  data
+) {
+
+  const factors =
+    data.factorsUsed ||
+    data.factors ||
+    {};
+
+  setFactor(
+    "factorDirectXG",
+    Boolean(
+      factors.directXG
+    )
+  );
+
+  setFactor(
+    "factorStandings",
+    Boolean(
+      factors.standings
+    )
+  );
+
+  setFactor(
+    "factorForm",
+    Boolean(
+      factors.form
+    )
+  );
+
+  setFactor(
+    "factorHomeAway",
+    Boolean(
+      factors.homeAway
+    )
+  );
+
+  setFactor(
+    "factorH2H",
+    Boolean(
+      factors.h2h
+    )
+  );
+
+  const lineupsUsed =
+    Array.isArray(
+      data.lineups
+    ) &&
+    data.lineups.length > 0;
+
+  const injuriesUsed =
+    Array.isArray(
+      data.injuries
+    ) &&
+    data.injuries.length > 0;
+
+  setFactor(
+    "factorLineups",
+    lineupsUsed
+  );
+
+  setFactor(
+    "factorInjuries",
+    injuriesUsed
+  );
+}
+
+
+function setFactor(
+  id,
+  used
+) {
+
+  const element =
+    getElement(id);
+
+  if (!element) {
+    return;
   }
 
-  function renderFairOdds(odds) {
-    setText(
-      "fairHome",
-      formatOdds(odds.home)
-    );
-
-    setText(
-      "fairDraw",
-      formatOdds(odds.draw)
-    );
-
-    setText(
-      "fairAway",
-      formatOdds(odds.away)
-    );
-
-    setText(
-      "fairOver25",
-      formatOdds(odds.over25)
-    );
-
-    setText(
-      "fairUnder25",
-      formatOdds(odds.under25)
-    );
-
-    setText(
-      "fairBttsYes",
-      formatOdds(odds.bttsYes)
-    );
-  }
-
-  function renderFactors(data) {
-    const factors =
-      data.factorsUsed ||
-      data.factors ||
-      {};
-
-    setFactor(
-      "factorDirectXG",
-      Boolean(factors.directXG)
-    );
-
-    setFactor(
-      "factorStandings",
-      Boolean(factors.standings)
-    );
-
-    setFactor(
-      "factorForm",
-      Boolean(factors.form)
-    );
-
-    setFactor(
-      "factorHomeAway",
-      Boolean(factors.homeAway)
-    );
-
-    setFactor(
-      "factorH2H",
-      Boolean(factors.h2h)
-    );
-
-    const lineupsUsed =
-      Array.isArray(data.lineups) &&
-      data.lineups.length > 0;
-
-    const injuriesUsed =
-      Array.isArray(data.injuries) &&
-      data.injuries.length > 0;
-
-    setFactor(
-      "factorLineups",
-      lineupsUsed
-    );
-
-    setFactor(
-      "factorInjuries",
-      injuriesUsed
-    );
-  }
-
-  function setFactor(id, used) {
-    const el = getElement(id);
-
-    if (!el) return;
-
-    el.textContent = used
+  element.textContent =
+    used
       ? "✓ Utilizzato"
       : "— Non disponibile";
 
-    el.className =
-      `factor-value ${used ? "yes" : "no"}`;
-  }
+  element.className =
+    `factor-value ${
+      used
+        ? "yes"
+        : "no"
+    }`;
+}
 
-  function renderH2H(data) {
-    const container = getElement("h2hSummary");
 
-    if (!container) return;
+/* =========================================================
+   H2H RENDER
+========================================================= */
 
-    const h2h = data.h2h;
+function renderH2H(
+  data
+) {
 
-    if (
-      !h2h ||
-      h2h.available !== true
-    ) {
-      container.textContent =
-        "Nessun H2H disponibile per questa partita.";
-      return;
-    }
-
-    const matches =
-      Number(h2h.matches) || 0;
-
-    const avgHome =
-      Number(h2h.averageHomeGoals);
-
-    const avgAway =
-      Number(h2h.averageAwayGoals);
-
-    const homeText =
-      Number.isFinite(avgHome)
-        ? avgHome.toFixed(2)
-        : "—";
-
-    const awayText =
-      Number.isFinite(avgAway)
-        ? avgAway.toFixed(2)
-        : "—";
-
-    container.innerHTML = `
-      <strong>${matches}</strong> precedenti utilizzati.
-      Media gol nella prospettiva della partita:
-      <strong>${homeText}</strong> casa /
-      <strong>${awayText}</strong> ospite.
-    `;
-  }
-
-  function setupEvents() {
-    getElement("syncButton")
-      ?.addEventListener("click", syncData);
-
-    getElement("predictButton")
-      ?.addEventListener("click", predict);
-
-    getElement("homeTeam")
-      ?.addEventListener("change", () => {
-        hideResults();
-        hideError();
-
-        setStatus(
-          "Squadra casa selezionata. Premi Calcola previsione.",
-          ""
-        );
-      });
-
-    getElement("awayTeam")
-      ?.addEventListener("change", () => {
-        hideResults();
-        hideError();
-
-        setStatus(
-          "Squadra ospite selezionata. Premi Calcola previsione.",
-          ""
-        );
-      });
-  }
-
-  function setupGlobalErrors() {
-    window.addEventListener("error", event => {
-      console.error("GLOBAL ERROR:", event.error || event.message);
-
-      showError(
-        `Errore JavaScript:\n${event.message || "Errore sconosciuto"}`
-      );
-    });
-
-    window.addEventListener(
-      "unhandledrejection",
-      event => {
-        console.error(
-          "UNHANDLED PROMISE:",
-          event.reason
-        );
-
-        showError(
-          `Errore applicazione:\n${
-            event.reason?.message ||
-            event.reason ||
-            "Errore sconosciuto"
-          }`
-        );
-      }
+  const container =
+    getElement(
+      "h2hSummary"
     );
+
+  if (!container) {
+    return;
   }
 
-  function init() {
-    try {
-      setupGlobalErrors();
-      setupEvents();
-      populateTeams();
+  const h2h =
+    data.h2h;
+
+  if (
+    !h2h ||
+    h2h.available !== true
+  ) {
+
+    container.textContent =
+      "Nessun H2H disponibile per questa partita.";
+
+    return;
+  }
+
+  const matches =
+    Number(
+      h2h.matches
+    ) || 0;
+
+  const avgHome =
+    Number(
+      h2h.averageHomeGoals
+    );
+
+  const avgAway =
+    Number(
+      h2h.averageAwayGoals
+    );
+
+  const homeText =
+    Number.isFinite(
+      avgHome
+    )
+      ? avgHome.toFixed(2)
+      : "—";
+
+  const awayText =
+    Number.isFinite(
+      avgAway
+    )
+      ? avgAway.toFixed(2)
+      : "—";
+
+  container.innerHTML =
+    `
+      <strong>${matches}</strong>
+      precedenti utilizzati.
+      Media gol nella prospettiva della partita:
+      <strong>${homeText}</strong>
+      casa /
+      <strong>${awayText}</strong>
+      ospite.
+    `;
+}
+
+
+/* =========================================================
+   EVENTS
+========================================================= */
+
+function setupEvents() {
+
+  getElement(
+    "syncButton"
+  )?.addEventListener(
+    "click",
+    syncData
+  );
+
+  getElement(
+    "predictButton"
+  )?.addEventListener(
+    "click",
+    predict
+  );
+
+  getElement(
+    "homeTeam"
+  )?.addEventListener(
+    "change",
+    () => {
+
+      hideResults();
+      hideError();
 
       setStatus(
-        "Pronto. Premi «Sincronizza BBD».",
+        "Squadra casa selezionata. Premi Calcola previsione.",
         ""
       );
+    }
+  );
 
-    } catch (error) {
-      console.error("INIT ERROR:", error);
+  getElement(
+    "awayTeam"
+  )?.addEventListener(
+    "change",
+    () => {
+
+      hideResults();
+      hideError();
+
+      setStatus(
+        "Squadra ospite selezionata. Premi Calcola previsione.",
+        ""
+      );
+    }
+  );
+}
+
+
+/* =========================================================
+   GLOBAL ERRORS
+========================================================= */
+
+function setupGlobalErrors() {
+
+  window.addEventListener(
+    "error",
+    event => {
+
+      console.error(
+        "GLOBAL ERROR:",
+        event.error ||
+        event.message
+      );
 
       showError(
-        `Errore inizializzazione:\n${
-          error?.message || error
+        `Errore JavaScript:\n${
+          event.message ||
+          "Errore sconosciuto"
         }`
       );
     }
-  }
+  );
 
-  init();
+  window.addEventListener(
+    "unhandledrejection",
+    event => {
+
+      console.error(
+        "UNHANDLED PROMISE:",
+        event.reason
+      );
+
+      showError(
+        `Errore applicazione:\n${
+          event.reason?.message ||
+          event.reason ||
+          "Errore sconosciuto"
+        }`
+      );
+    }
+  );
+}
+
+
+/* =========================================================
+   INIT
+========================================================= */
+
+function init() {
+
+  try {
+
+    setupGlobalErrors();
+
+    setupEvents();
+
+    populateTeams();
+
+    setStatus(
+      "Pronto. Premi «Sincronizza BBD».",
+      ""
+    );
+
+  } catch (error) {
+
+    console.error(
+      "INIT ERROR:",
+      error
+    );
+
+    showError(
+      `Errore inizializzazione:\n${
+        error?.message ||
+        error
+      }`
+    );
+  }
+}
+
+
+init();
 </script>
 
 </body>
