@@ -1,17 +1,16 @@
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Recupera predictions
     const { data: predictions } = await supabase
       .from('predictions')
       .select('*')
@@ -25,12 +24,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Recupera risultati
     const { data: results } = await supabase
       .from('results')
       .select('*');
 
-    // Join
     const matched = predictions
       .map(p => ({
         ...p,
@@ -46,26 +43,22 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Calcola accuracy
     const correct = matched.filter(
       p => p.prediction_1x2 === p.result.result_1x2
     ).length;
     const globalAccuracy = correct / matched.length;
 
-    // Recent 10
     const recent10 = matched.slice(0, 10);
     const recent10Correct = recent10.filter(
       p => p.prediction_1x2 === p.result.result_1x2
     ).length;
     const recentAccuracy = recent10.length > 0 ? recent10Correct / recent10.length : globalAccuracy;
 
-    // Shrinkage
     const shrinkageWeight = 0.3;
     const shrunkenAccuracy =
       globalAccuracy * (1 - shrinkageWeight) +
       recentAccuracy * shrinkageWeight;
 
-    // MAE
     const mae =
       matched.reduce((sum, p) => {
         const predGols = (p.xg_home || 0) + (p.xg_away || 0);
@@ -90,4 +83,4 @@ module.exports = async function handler(req, res) {
       error: error.message
     });
   }
-};
+}
