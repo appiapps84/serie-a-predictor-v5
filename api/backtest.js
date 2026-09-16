@@ -2,12 +2,11 @@ const BBS_BASE = "https://api.bigballsdata.com";
 
 const SPORT = "football";
 const LEAGUE = "seriea";
-
 const YEAR = 2025;
 
-const MAX_CANDIDATE_MATCHES = 60;
-const MAX_TEST_MATCHES = 30;
-const MAX_STATS_REQUESTS = 50;
+const MAX_CANDIDATE_MATCHES = 30;
+const MAX_TEST_MATCHES = 10;
+const MAX_STATS_REQUESTS = 10;
 
 const LIST_TIMEOUT = 8000;
 const STATS_TIMEOUT = 8000;
@@ -38,38 +37,36 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function timeoutFetch(url, options = {}, timeout = 8000) {
-  const controller = new AbortController();
-
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, timeout);
-
-  return fetch(url, {
-    ...options,
-    signal: controller.signal
-  }).finally(() => {
-    clearTimeout(timer);
-  });
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function fetchJson(url, timeout) {
+async function fetchJson(url, timeout = 8000) {
   const apiKey = process.env.BBS_API_KEY;
 
   if (!apiKey) {
     throw new Error("BBS_API_KEY non configurata.");
   }
 
-  const response = await timeoutFetch(
-    url,
-    {
+  const controller = new AbortController();
+
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeout);
+
+  let response;
+
+  try {
+    response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "X-API-Key": apiKey
-      }
-    },
-    timeout
-  );
+      },
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   const text = await response.text();
 
@@ -84,14 +81,16 @@ async function fetchJson(url, timeout) {
   }
 
   if (!response.ok) {
-    const message =
+    const error = new Error(
       payload?.error?.message ||
       payload?.message ||
-      `BBD HTTP ${response.status}`;
+      `BBD HTTP ${response.status}`
+    );
 
-    const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
+    error.retryAfter =
+      Number(response.headers.get("retry-after")) || 0;
 
     throw error;
   }
@@ -100,22 +99,10 @@ async function fetchJson(url, timeout) {
 }
 
 function extractArray(payload) {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  if (Array.isArray(payload?.data)) {
-    return payload.data;
-  }
-
-  if (Array.isArray(payload?.matches)) {
-    return payload.matches;
-  }
-
-  if (Array.isArray(payload?.results)) {
-    return payload.results;
-  }
-
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.matches)) return payload.matches;
+  if (Array.isArray(payload?.results)) return payload.results;
   return [];
 }
 
@@ -173,9 +160,7 @@ function extractDate(match) {
     match?.game_date ||
     null;
 
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
 
   const date = new Date(value);
 
@@ -193,9 +178,7 @@ function extractScore(match) {
     match?.result ||
     null;
 
-  if (!score) {
-    return null;
-  }
+  if (!score) return null;
 
   const home =
     number(score.home) ??
@@ -215,45 +198,34 @@ function extractScore(match) {
     return null;
   }
 
-  return {
-    home,
-    away
-  };
-}
-
-function getMatchId(match) {
-  return String(
-    match?.id ||
-    match?.match_id ||
-    match?.matchId ||
-    ""
-  ).trim();
+  return { home, away };
 }
 
 function normalizeMatch(match) {
   return {
-    id: getMatchId(match),
+    id: String(
+      match?.id ||
+      match?.match_id ||
+      match?.matchId ||
+      ""
+    ).trim(),
+
     homeTeam: extractHomeTeam(match),
     awayTeam: extractAwayTeam(match),
     date: extractDate(match),
     score: extractScore(match),
-    status:
-      match?.status ||
-      match?.state ||
-      match?.match_status ||
-      null,
     xG: null
   };
 }
 
-function validFinishedMatch(match) {
-  if (!match.id) return false;
-  if (!match.homeTeam) return false;
-  if (!match.awayTeam) return false;
-  if (!match.date) return false;
-  if (!match.score) return false;
-
-  return true;
+function isValidMatch(match) {
+  return Boolean(
+    match.id &&
+    match.homeTeam &&
+    match.awayTeam &&
+    match.date &&
+    match.score
+  );
 }
 
 function dateKey(date) {
@@ -261,122 +233,141 @@ function dateKey(date) {
 }
 
 function monthDays(year, month) {
-  const days = new Date(
+  return new Date(
     Date.UTC(year, month + 1, 0)
   ).getUTCDate();
-
-  return days;
 }
 
 /*
- * Recupera un mese intero usando il filtro date.
+ * Recupera tutto il 2025.
  *
- * Usiamo una richiesta per ogni giorno solo se
- * il filtro date giornaliero è necessario.
+ * Prima prova il range mensile.
+ * Se BBD non restituisce risultati per il range,
+ * usa il filtro date giornaliero.
  *
- * Inizialmente proviamo il mese tramite start/end
- * solo se BBD lo supporta; altrimenti fallback
- * automatico ai singoli giorni.
+ * Questa parte non fa chiamate stats:
+ * sono le chiamate costose che vogliamo limitare.
  */
-async function fetchMonth(year, month) {
-  const firstDay =
-    `${year}-${String(month + 1).padStart(2, "0")}-01`;
+async function fetch2025Matches() {
+  const rawRows = [];
+  const diagnostics = [];
 
-  const lastDay =
-    `${year}-${String(month + 1).padStart(2, "0")}-${String(
-      monthDays(year, month)
-    ).padStart(2, "0")}`;
+  for (let month = 0; month < 12; month++) {
+    const firstDay =
+      `${YEAR}-${String(month + 1).padStart(2, "0")}-01`;
 
-  /*
-   * Tentativo principale:
-   * date_from/date_to.
-   *
-   * Se BBD non li accetta, usiamo il fallback.
-   */
-  const rangeUrl =
-    `${BBS_BASE}/v1/stored/matches` +
-    `?sport=${encodeURIComponent(SPORT)}` +
-    `&league=${encodeURIComponent(LEAGUE)}` +
-    `&status=finished` +
-    `&date_from=${encodeURIComponent(firstDay)}` +
-    `&date_to=${encodeURIComponent(lastDay)}` +
-    `&limit=200`;
-
-  try {
-    const payload =
-      await fetchJson(
-        rangeUrl,
-        LIST_TIMEOUT
-      );
-
-    const rows =
-      extractArray(payload);
-
-    if (rows.length > 0) {
-      return rows;
-    }
-  } catch (error) {
-    /*
-     * Fallback giornaliero sotto.
-     */
-  }
-
-  /*
-   * Fallback sicuro:
-   * date=YYYY-MM-DD è documentato da BBD.
-   */
-  const result = [];
-
-  const days =
-    monthDays(year, month);
-
-  for (
-    let day = 1;
-    day <= days;
-    day++
-  ) {
-    const date =
-      `${year}-${String(month + 1).padStart(2, "0")}-${String(
-        day
+    const lastDay =
+      `${YEAR}-${String(month + 1).padStart(2, "0")}-${String(
+        monthDays(YEAR, month)
       ).padStart(2, "0")}`;
 
-    const url =
+    let rangeWorked = false;
+
+    const rangeUrl =
       `${BBS_BASE}/v1/stored/matches` +
-      `?sport=${encodeURIComponent(SPORT)}` +
-      `&league=${encodeURIComponent(LEAGUE)}` +
+      `?sport=${SPORT}` +
+      `&league=${LEAGUE}` +
       `&status=finished` +
-      `&date=${encodeURIComponent(date)}` +
+      `&date_from=${firstDay}` +
+      `&date_to=${lastDay}` +
       `&limit=200`;
 
     try {
       const payload =
         await fetchJson(
-          url,
+          rangeUrl,
           LIST_TIMEOUT
         );
 
-      result.push(
-        ...extractArray(payload)
-      );
+      const rows =
+        extractArray(payload);
+
+      const valid =
+        rows.filter(row => {
+          const date =
+            extractDate(row);
+
+          return (
+            date &&
+            date.getUTCFullYear() === YEAR &&
+            date.getUTCMonth() === month
+          );
+        });
+
+      if (valid.length > 0) {
+        rawRows.push(...valid);
+        rangeWorked = true;
+      }
     } catch (error) {
       /*
-       * Non blocchiamo tutto il mese per
-       * un singolo giorno problematico.
+       * Fallback sotto.
        */
     }
+
+    /*
+     * Fallback giornaliero.
+     *
+     * Non viene eseguito se il range mensile
+     * ha restituito dati.
+     */
+    if (!rangeWorked) {
+      const days =
+        monthDays(YEAR, month);
+
+      for (let day = 1; day <= days; day++) {
+        const date =
+          `${YEAR}-${String(month + 1).padStart(2, "0")}-${String(
+            day
+          ).padStart(2, "0")}`;
+
+        const url =
+          `${BBS_BASE}/v1/stored/matches` +
+          `?sport=${SPORT}` +
+          `&league=${LEAGUE}` +
+          `&status=finished` +
+          `&date=${date}` +
+          `&limit=200`;
+
+        try {
+          const payload =
+            await fetchJson(
+              url,
+              LIST_TIMEOUT
+            );
+
+          rawRows.push(
+            ...extractArray(payload)
+          );
+        } catch (error) {
+          /*
+           * Un singolo giorno non blocca
+           * l'intero backtest.
+           */
+        }
+      }
+    }
+
+    diagnostics.push({
+      month: month + 1,
+      range: `${firstDay} → ${lastDay}`,
+      mode: rangeWorked ? "range" : "daily"
+    });
   }
 
-  return result;
+  return {
+    rawRows,
+    diagnostics
+  };
 }
 
-function collectUniqueMatches(rows) {
+function uniqueMatches(rows) {
   const map = new Map();
 
   for (const raw of rows) {
     const match =
       normalizeMatch(raw);
 
-    if (!validFinishedMatch(match)) {
+    if (!isValidMatch(match)) {
       continue;
     }
 
@@ -386,10 +377,8 @@ function collectUniqueMatches(rows) {
       continue;
     }
 
-    const id = match.id;
-
-    if (!map.has(id)) {
-      map.set(id, match);
+    if (!map.has(match.id)) {
+      map.set(match.id, match);
     }
   }
 
@@ -402,63 +391,19 @@ function collectUniqueMatches(rows) {
 }
 
 /*
- * Cerca xG nella risposta BBD.
+ * Cerca xG nella risposta stats.
  */
-function findNumericXG(value) {
-  const n = number(value);
-
-  if (
-    n !== null &&
-    n >= 0 &&
-    n <= 10
-  ) {
-    return n;
-  }
-
-  if (
-    value &&
-    typeof value === "object"
-  ) {
-    const candidates = [
-      value.xg,
-      value.XG,
-      value.expected_goals,
-      value.expectedGoals,
-      value.value
-    ];
-
-    for (const candidate of candidates) {
-      const parsed =
-        number(candidate);
-
-      if (
-        parsed !== null &&
-        parsed >= 0 &&
-        parsed <= 10
-      ) {
-        return parsed;
-      }
-    }
-  }
-
-  return null;
-}
-
-function extractMatchXG(
-  payload,
-  homeTeam,
-  awayTeam
-) {
-  if (!payload) {
-    return null;
-  }
-
+function extractXG(payload, homeTeam, awayTeam) {
   const data =
     payload?.data ??
     payload;
 
+  if (!data) {
+    return null;
+  }
+
   /*
-   * Caso diretto.
+   * Formato diretto.
    */
   const homeCandidates = [
     data?.home?.xg,
@@ -486,21 +431,27 @@ function extractMatchXG(
   let awayXG = null;
 
   for (const value of homeCandidates) {
-    const parsed =
-      findNumericXG(value);
+    const n = number(value);
 
-    if (parsed !== null) {
-      homeXG = parsed;
+    if (
+      n !== null &&
+      n >= 0 &&
+      n <= 10
+    ) {
+      homeXG = n;
       break;
     }
   }
 
   for (const value of awayCandidates) {
-    const parsed =
-      findNumericXG(value);
+    const n = number(value);
 
-    if (parsed !== null) {
-      awayXG = parsed;
+    if (
+      n !== null &&
+      n >= 0 &&
+      n <= 10
+    ) {
+      awayXG = n;
       break;
     }
   }
@@ -517,7 +468,7 @@ function extractMatchXG(
   }
 
   /*
-   * team_stats.
+   * Formato team_stats.
    */
   const teamStats =
     Array.isArray(data?.team_stats)
@@ -527,11 +478,11 @@ function extractMatchXG(
         : [];
 
   if (teamStats.length > 0) {
-    let homeValue = null;
-    let awayValue = null;
+    let foundHome = null;
+    let foundAway = null;
 
     for (const row of teamStats) {
-      const teamName =
+      const team =
         extractTeamName(
           row?.team ||
           row?.team_name ||
@@ -540,50 +491,117 @@ function extractMatchXG(
         );
 
       const xg =
-        findNumericXG(row?.xg) ??
-        findNumericXG(row?.XG) ??
-        findNumericXG(
-          row?.expected_goals
-        ) ??
-        findNumericXG(
-          row?.expectedGoals
-        );
+        number(row?.xg) ??
+        number(row?.XG) ??
+        number(row?.expected_goals) ??
+        number(row?.expectedGoals);
 
-      if (xg === null) {
+      if (
+        xg === null ||
+        xg < 0 ||
+        xg > 10
+      ) {
         continue;
       }
 
       const normalized =
-        normalizeName(teamName);
+        normalizeName(team);
 
       if (
         normalized ===
         normalizeName(homeTeam)
       ) {
-        homeValue = xg;
+        foundHome = xg;
       }
 
       if (
         normalized ===
         normalizeName(awayTeam)
       ) {
-        awayValue = xg;
+        foundAway = xg;
       }
     }
 
     if (
-      homeValue !== null &&
-      awayValue !== null
+      foundHome !== null &&
+      foundAway !== null
     ) {
       return {
-        home: homeValue,
-        away: awayValue,
+        home: foundHome,
+        away: foundAway,
         source: "team_stats"
       };
     }
   }
 
   return null;
+}
+
+/*
+ * Recupera xG di una singola partita.
+ *
+ * NON fa retry automatici su 429.
+ * Se arriva 429, interrompe il ciclo
+ * principale per proteggere la quota.
+ */
+async function fetchMatchXG(match) {
+  const url =
+    `${BBS_BASE}/v1/stored/matches/` +
+    `${encodeURIComponent(match.id)}/stats`;
+
+  try {
+    const payload =
+      await fetchJson(
+        url,
+        STATS_TIMEOUT
+      );
+
+    const xG =
+      extractXG(
+        payload,
+        match.homeTeam,
+        match.awayTeam
+      );
+
+    if (!xG) {
+      return {
+        ok: false,
+        rateLimited: false,
+        reason:
+          payload?.meta?.coverage_note ||
+          "xG non presente",
+        payloadMeta:
+          payload?.meta || null
+      };
+    }
+
+    return {
+      ok: true,
+      rateLimited: false,
+      xG
+    };
+  } catch (error) {
+    if (
+      error?.status === 429
+    ) {
+      return {
+        ok: false,
+        rateLimited: true,
+        retryAfter:
+          error.retryAfter || 0,
+        reason:
+          error.message
+      };
+    }
+
+    return {
+      ok: false,
+      rateLimited: false,
+      reason:
+        error?.message ||
+        "Errore stats"
+    };
+  }
 }
 
 function getRecentMatches(
@@ -608,12 +626,10 @@ function getRecentMatches(
       }
 
       return (
-        normalizeName(
-          match.homeTeam
-        ) === wanted ||
-        normalizeName(
-          match.awayTeam
-        ) === wanted
+        normalizeName(match.homeTeam) ===
+          wanted ||
+        normalizeName(match.awayTeam) ===
+          wanted
       );
     })
     .sort(
@@ -624,7 +640,7 @@ function getRecentMatches(
     .slice(0, limit);
 }
 
-function getRecentForm(
+function getForm(
   history,
   teamName,
   beforeDate
@@ -649,18 +665,18 @@ function getRecentForm(
   let points = 0;
 
   for (const match of rows) {
-    const home =
+    const isHome =
       normalizeName(
         match.homeTeam
       ) === wanted;
 
     const gf =
-      home
+      isHome
         ? match.score.home
         : match.score.away;
 
     const ga =
-      home
+      isHome
         ? match.score.away
         : match.score.home;
 
@@ -685,7 +701,7 @@ function getRecentForm(
   };
 }
 
-function getRollingTeamXG(
+function getRollingXG(
   history,
   teamName,
   beforeDate
@@ -696,17 +712,14 @@ function getRollingTeamXG(
       teamName,
       beforeDate,
       5
-    );
-
-  const withXG =
-    rows.filter(
+    ).filter(
       match =>
         match.xG &&
         number(match.xG.home) !== null &&
         number(match.xG.away) !== null
     );
 
-  if (withXG.length === 0) {
+  if (rows.length === 0) {
     return null;
   }
 
@@ -716,13 +729,13 @@ function getRollingTeamXG(
   let xGFor = 0;
   let xGAgainst = 0;
 
-  for (const match of withXG) {
-    const home =
+  for (const match of rows) {
+    const isHome =
       normalizeName(
         match.homeTeam
       ) === wanted;
 
-    if (home) {
+    if (isHome) {
       xGFor += match.xG.home;
       xGAgainst += match.xG.away;
     } else {
@@ -732,29 +745,29 @@ function getRollingTeamXG(
   }
 
   return {
-    matches: withXG.length,
+    matches: rows.length,
     xGFor:
-      xGFor / withXG.length,
+      xGFor / rows.length,
     xGAgainst:
-      xGAgainst / withXG.length
+      xGAgainst / rows.length
   };
 }
 
-function calculateBaseline(
+function baselineModel(
   homeTeam,
   awayTeam,
   history,
   date
 ) {
   const homeForm =
-    getRecentForm(
+    getForm(
       history,
       homeTeam,
       date
     );
 
   const awayForm =
-    getRecentForm(
+    getForm(
       history,
       awayTeam,
       date
@@ -779,57 +792,48 @@ function calculateBaseline(
       0.35 *
         homeForm.goalsAgainstPerGame;
 
-    const homeFormFactor =
-      clamp(
-        0.90 +
-          (homeForm.pointsPerGame / 3) *
-            0.15,
-        0.90,
-        1.05
-      );
+    homeXG *= clamp(
+      0.90 +
+        (homeForm.pointsPerGame / 3) *
+          0.15,
+      0.90,
+      1.05
+    );
 
-    const awayFormFactor =
-      clamp(
-        0.90 +
-          (awayForm.pointsPerGame / 3) *
-            0.15,
-        0.90,
-        1.05
-      );
-
-    homeXG *= homeFormFactor;
-    awayXG *= awayFormFactor;
+    awayXG *= clamp(
+      0.90 +
+        (awayForm.pointsPerGame / 3) *
+          0.15,
+      0.90,
+      1.05
+    );
   }
 
-  /*
-   * Vantaggio casa.
-   */
   homeXG *= 1.06;
 
   return {
-    home:
-      clamp(
-        homeXG,
-        0.15,
-        4.5
-      ),
-    away:
-      clamp(
-        awayXG,
-        0.10,
-        4.0
-      )
+    home: clamp(
+      homeXG,
+      0.15,
+      4.5
+    ),
+
+    away: clamp(
+      awayXG,
+      0.10,
+      4.0
+    )
   };
 }
 
-function calculateWithXG(
+function xGModel(
   homeTeam,
   awayTeam,
   history,
   date
 ) {
   const baseline =
-    calculateBaseline(
+    baselineModel(
       homeTeam,
       awayTeam,
       history,
@@ -837,14 +841,14 @@ function calculateWithXG(
     );
 
   const homeXG =
-    getRollingTeamXG(
+    getRollingXG(
       history,
       homeTeam,
       date
     );
 
   const awayXG =
-    getRollingTeamXG(
+    getRollingXG(
       history,
       awayTeam,
       date
@@ -856,17 +860,11 @@ function calculateWithXG(
   ) {
     return {
       ...baseline,
-      xGAvailable: false,
-      xGMatches: 0
+      available: false,
+      previousXGMatches: 0
     };
   }
 
-  /*
-   * Combiniamo:
-   *
-   * 65% modello gol/forma
-   * 35% xG storico
-   */
   let homeExpected =
     baseline.home * 0.65 +
     homeXG.xGFor * 0.35;
@@ -875,49 +873,38 @@ function calculateWithXG(
     baseline.away * 0.65 +
     awayXG.xGFor * 0.35;
 
-  /*
-   * Piccolo aggiustamento difensivo.
-   */
-  const awayDefense =
+  homeExpected *=
+    0.90 +
     clamp(
       awayXG.xGAgainst / 1.20,
       0.80,
       1.20
-    );
+    ) * 0.10;
 
-  const homeDefense =
+  awayExpected *=
+    0.90 +
     clamp(
       homeXG.xGAgainst / 1.20,
       0.80,
       1.20
-    );
-
-  homeExpected *=
-    0.90 +
-    awayDefense * 0.10;
-
-  awayExpected *=
-    0.90 +
-    homeDefense * 0.10;
+    ) * 0.10;
 
   return {
-    home:
-      clamp(
-        homeExpected,
-        0.15,
-        4.5
-      ),
+    home: clamp(
+      homeExpected,
+      0.15,
+      4.5
+    ),
 
-    away:
-      clamp(
-        awayExpected,
-        0.10,
-        4.0
-      ),
+    away: clamp(
+      awayExpected,
+      0.10,
+      4.0
+    ),
 
-    xGAvailable: true,
+    available: true,
 
-    xGMatches:
+    previousXGMatches:
       Math.min(
         homeXG.matches,
         awayXG.matches
@@ -925,17 +912,12 @@ function calculateWithXG(
   };
 }
 
-function poisson(
-  k,
-  lambda
-) {
+function poisson(k, lambda) {
   if (
     !Number.isFinite(lambda) ||
     lambda <= 0
   ) {
-    return k === 0
-      ? 1
-      : 0;
+    return k === 0 ? 1 : 0;
   }
 
   let factorial = 1;
@@ -955,51 +937,33 @@ function poisson(
   );
 }
 
-function dixonColesAdjustment(
-  homeGoals,
-  awayGoals,
-  homeLambda,
-  awayLambda
+function dixonColes(
+  h,
+  a,
+  homeXG,
+  awayXG
 ) {
   const rho =
     DIXON_COLES_RHO;
 
-  if (
-    homeGoals === 0 &&
-    awayGoals === 0
-  ) {
+  if (h === 0 && a === 0) {
     return (
       1 -
-      homeLambda *
-        awayLambda *
+      homeXG *
+        awayXG *
         rho
     );
   }
 
-  if (
-    homeGoals === 0 &&
-    awayGoals === 1
-  ) {
-    return (
-      1 +
-      homeLambda * rho
-    );
+  if (h === 0 && a === 1) {
+    return 1 + homeXG * rho;
   }
 
-  if (
-    homeGoals === 1 &&
-    awayGoals === 0
-  ) {
-    return (
-      1 +
-      awayLambda * rho
-    );
+  if (h === 1 && a === 0) {
+    return 1 + awayXG * rho;
   }
 
-  if (
-    homeGoals === 1 &&
-    awayGoals === 1
-  ) {
+  if (h === 1 && a === 1) {
     return 1 - rho;
   }
 
@@ -1025,28 +989,21 @@ function buildMatrix(
       a <= MAX_GOALS;
       a++
     ) {
-      const base =
+      const p =
         poisson(h, homeXG) *
-        poisson(a, awayXG);
-
-      const adjustment =
-        dixonColesAdjustment(
+        poisson(a, awayXG) *
+        dixonColes(
           h,
           a,
           homeXG,
           awayXG
         );
 
-      const probability =
-        Math.max(
-          0,
-          base * adjustment
-        );
-
       matrix[h][a] =
-        probability;
+        Math.max(0, p);
 
-      total += probability;
+      total +=
+        matrix[h][a];
     }
   }
 
@@ -1070,9 +1027,7 @@ function buildMatrix(
   return matrix;
 }
 
-function probabilitiesFromMatrix(
-  matrix
-) {
+function getProbabilities(matrix) {
   let home = 0;
   let draw = 0;
   let away = 0;
@@ -1107,9 +1062,7 @@ function probabilitiesFromMatrix(
   };
 }
 
-function actualClass(
-  score
-) {
+function actualResult(score) {
   if (
     score.home >
     score.away
@@ -1127,23 +1080,17 @@ function actualClass(
   return "away";
 }
 
-function predictedClass(
-  probabilities
-) {
+function predictedResult(p) {
   if (
-    probabilities.home >=
-      probabilities.draw &&
-    probabilities.home >=
-      probabilities.away
+    p.home >= p.draw &&
+    p.home >= p.away
   ) {
     return "home";
   }
 
   if (
-    probabilities.draw >=
-      probabilities.home &&
-    probabilities.draw >=
-      probabilities.away
+    p.draw >= p.home &&
+    p.draw >= p.away
   ) {
     return "draw";
   }
@@ -1151,62 +1098,38 @@ function predictedClass(
   return "away";
 }
 
-function brierScore(
-  probabilities,
-  actual
-) {
-  const target = {
-    home:
-      actual === "home"
-        ? 1
-        : 0,
-
-    draw:
-      actual === "draw"
-        ? 1
-        : 0,
-
-    away:
-      actual === "away"
-        ? 1
-        : 0
-  };
-
+function brier(p, actual) {
   return (
     Math.pow(
-      probabilities.home -
-        target.home,
+      p.home -
+        (actual === "home" ? 1 : 0),
       2
     ) +
     Math.pow(
-      probabilities.draw -
-        target.draw,
+      p.draw -
+        (actual === "draw" ? 1 : 0),
       2
     ) +
     Math.pow(
-      probabilities.away -
-        target.away,
+      p.away -
+        (actual === "away" ? 1 : 0),
       2
     )
   );
 }
 
-function logLoss(
-  probabilities,
-  actual
-) {
-  const epsilon =
-    0.000001;
+function logLoss(p, actual) {
+  const epsilon = 0.000001;
 
   return -Math.log(
     Math.max(
       epsilon,
-      probabilities[actual]
+      p[actual]
     )
   );
 }
 
-function addMetrics(
+function addMetric(
   metrics,
   probabilities,
   actual
@@ -1214,7 +1137,7 @@ function addMetrics(
   metrics.matches++;
 
   if (
-    predictedClass(
+    predictedResult(
       probabilities
     ) === actual
   ) {
@@ -1222,7 +1145,7 @@ function addMetrics(
   }
 
   metrics.brier +=
-    brierScore(
+    brier(
       probabilities,
       actual
     );
@@ -1234,9 +1157,7 @@ function addMetrics(
     );
 }
 
-function finalizeMetrics(
-  metrics
-) {
+function finalize(metrics) {
   if (
     metrics.matches === 0
   ) {
@@ -1308,170 +1229,23 @@ export default async function handler(
   try {
     /*
      * ==========================================
-     * 1. RECUPERO DELLE PARTITE DEL 2025
+     * 1. CARICAMENTO PARTITE 2025
      * ==========================================
-     *
-     * Usiamo un giorno alla volta come fallback
-     * perché BBD documenta date=YYYY-MM-DD.
-     *
-     * Per evitare un'enorme quantità di chiamate,
-     * facciamo prima il tentativo mensile.
      */
 
-    const rawRows = [];
-
-    const monthDiagnostics = [];
-
-    for (
-      let month = 0;
-      month < 12;
-      month++
-    ) {
-      const firstDay =
-        `${YEAR}-${String(month + 1).padStart(2, "0")}-01`;
-
-      const lastDay =
-        `${YEAR}-${String(month + 1).padStart(2, "0")}-${String(
-          monthDays(YEAR, month)
-        ).padStart(2, "0")}`;
-
-      /*
-       * BBD attualmente documenta il filtro
-       * date singolo. Proviamo comunque una
-       * richiesta mensile; se non funziona,
-       * passiamo al giorno per giorno.
-       */
-      const rangeUrl =
-        `${BBS_BASE}/v1/stored/matches` +
-        `?sport=${encodeURIComponent(SPORT)}` +
-        `&league=${encodeURIComponent(LEAGUE)}` +
-        `&status=finished` +
-        `&date_from=${encodeURIComponent(firstDay)}` +
-        `&date_to=${encodeURIComponent(lastDay)}` +
-        `&limit=200`;
-
-      let usedRange = false;
-
-      try {
-        const rangePayload =
-          await fetchJson(
-            rangeUrl,
-            LIST_TIMEOUT
-          );
-
-        const rangeRows =
-          extractArray(
-            rangePayload
-          );
-
-        /*
-         * Verifichiamo che il range abbia
-         * effettivamente restituito partite
-         * appartenenti al mese richiesto.
-         */
-        const validRangeRows =
-          rangeRows.filter(row => {
-            const date =
-              extractDate(row);
-
-            return (
-              date &&
-              date.getUTCFullYear() ===
-                YEAR &&
-              date.getUTCMonth() ===
-                month
-            );
-          });
-
-        if (
-          validRangeRows.length > 0
-        ) {
-          rawRows.push(
-            ...validRangeRows
-          );
-
-          usedRange = true;
-        }
-      } catch (error) {
-        /*
-         * Fallback giornaliero.
-         */
-      }
-
-      /*
-       * Fallback giornaliero.
-       *
-       * Non lo facciamo se il range ha funzionato.
-       */
-      if (!usedRange) {
-        const days =
-          monthDays(
-            YEAR,
-            month
-          );
-
-        for (
-          let day = 1;
-          day <= days;
-          day++
-        ) {
-          const date =
-            `${YEAR}-${String(month + 1).padStart(2, "0")}-${String(
-              day
-            ).padStart(2, "0")}`;
-
-          const url =
-            `${BBS_BASE}/v1/stored/matches` +
-            `?sport=${encodeURIComponent(SPORT)}` +
-            `&league=${encodeURIComponent(LEAGUE)}` +
-            `&status=finished` +
-            `&date=${encodeURIComponent(date)}` +
-            `&limit=200`;
-
-          try {
-            const payload =
-              await fetchJson(
-                url,
-                LIST_TIMEOUT
-              );
-
-            rawRows.push(
-              ...extractArray(
-                payload
-              )
-            );
-          } catch (error) {
-            /*
-             * Non blocchiamo il backtest
-             * per un singolo giorno.
-             */
-          }
-        }
-      }
-
-      monthDiagnostics.push({
-        month:
-          month + 1,
-
-        range:
-          `${firstDay} → ${lastDay}`,
-
-        mode:
-          usedRange
-            ? "range"
-            : "daily"
-      });
-    }
+    const {
+      rawRows,
+      diagnostics: monthDiagnostics
+    } = await fetch2025Matches();
 
     const allMatches =
-      collectUniqueMatches(
-        rawRows
-      );
+      uniqueMatches(rawRows);
 
     /*
-     * Se abbiamo troppe partite, prendiamo
-     * le più recenti perché la copertura xG
-     * tende ad essere migliore.
+     * Partiamo dalle partite più recenti.
+     *
+     * Questo aumenta la probabilità di trovare
+     * stats/xG disponibili.
      */
     const candidates =
       allMatches
@@ -1481,35 +1255,32 @@ export default async function handler(
             allMatches.length -
               MAX_CANDIDATE_MATCHES
           )
-        );
+        )
+        .reverse();
 
     /*
      * ==========================================
-     * 2. RECUPERO xG
+     * 2. TEST xG
      * ==========================================
+     *
+     * MASSIMO 10 chiamate.
+     *
+     * Non facciamo retry automatici.
+     * Se BBD restituisce 429, STOP immediato.
      */
-
-    const history = [];
 
     const statsDiagnostics = [];
 
+    const xGMatches = [];
+
     let statsRequests = 0;
-    let xGMatches = 0;
     let statsUnavailable = 0;
     let statsErrors = 0;
-
-    /*
-     * Le candidate sono già ordinate
-     * cronologicamente.
-     *
-     * Le controlliamo dalla più recente
-     * alla più vecchia.
-     */
-    const statsCandidates =
-      [...candidates].reverse();
+    let rateLimited = false;
+    let retryAfter = 0;
 
     for (
-      const match of statsCandidates
+      const match of candidates
     ) {
       if (
         statsRequests >=
@@ -1518,84 +1289,30 @@ export default async function handler(
         break;
       }
 
+      /*
+       * Piccola pausa per evitare burst.
+       *
+       * Non aspettiamo 1 minuto:
+       * il limite è 100/min e noi siamo
+       * molto sotto quel limite.
+       */
+      if (statsRequests > 0) {
+        await sleep(800);
+      }
+
       statsRequests++;
 
-      const statsUrl =
-        `${BBS_BASE}/v1/stored/matches/` +
-        `${encodeURIComponent(match.id)}/stats`;
+      const result =
+        await fetchMatchXG(
+          match
+        );
 
-      try {
-        const payload =
-          await fetchJson(
-            statsUrl,
-            STATS_TIMEOUT
-          );
+      if (result.ok) {
+        match.xG = result.xG;
 
-        const available =
-          payload?.meta?.available;
-
-        const teamStatsAvailable =
-          payload?.meta
-            ?.team_stats_available;
-
-        if (
-          available === false ||
-          teamStatsAvailable === false
-        ) {
-          statsUnavailable++;
-
-          statsDiagnostics.push({
-            id: match.id,
-            date:
-              dateKey(match.date),
-            home:
-              match.homeTeam,
-            away:
-              match.awayTeam,
-            xG: false,
-            reason:
-              payload?.meta
-                ?.coverage_note ||
-              "Stats non disponibili"
-          });
-
-          continue;
-        }
-
-        const xG =
-          extractMatchXG(
-            payload,
-            match.homeTeam,
-            match.awayTeam
-          );
-
-        if (!xG) {
-          statsUnavailable++;
-
-          statsDiagnostics.push({
-            id: match.id,
-            date:
-              dateKey(match.date),
-            home:
-              match.homeTeam,
-            away:
-              match.awayTeam,
-            xG: false,
-            reason:
-              "Stats disponibili ma xG non trovato"
-          });
-
-          continue;
-        }
-
-        match.xG = {
-          home: xG.home,
-          away: xG.away
-        };
-
-        xGMatches++;
-
-        history.push(match);
+        xGMatches.push(
+          match
+        );
 
         statsDiagnostics.push({
           id: match.id,
@@ -1607,14 +1324,56 @@ export default async function handler(
             match.awayTeam,
           xG: true,
           homeXG:
-            xG.home,
+            result.xG.home,
           awayXG:
-            xG.away,
+            result.xG.away,
           source:
-            xG.source
+            result.xG.source
         });
-      } catch (error) {
-        statsErrors++;
+
+        continue;
+      }
+
+      if (
+        result.rateLimited
+      ) {
+        rateLimited = true;
+
+        retryAfter =
+          result.retryAfter || 0;
+
+        statsDiagnostics.push({
+          id: match.id,
+          date:
+            dateKey(match.date),
+          home:
+            match.homeTeam,
+          away:
+            match.awayTeam,
+          xG: false,
+          rateLimited: true,
+          retryAfter,
+          reason:
+            result.reason
+        });
+
+        /*
+         * STOP.
+         *
+         * Importantissimo:
+         * non continuiamo a bombardare BBD.
+         */
+        break;
+      }
+
+      /*
+       * Stats endpoint ha risposto,
+       * ma senza xG.
+       */
+      if (
+        result.reason
+      ) {
+        statsUnavailable++;
 
         statsDiagnostics.push({
           id: match.id,
@@ -1626,96 +1385,49 @@ export default async function handler(
             match.awayTeam,
           xG: false,
           reason:
-            error?.message ||
-            "Errore stats"
+            result.reason
         });
+      } else {
+        statsErrors++;
       }
     }
 
     /*
-     * Ordiniamo nuovamente la history.
-     */
-    history.sort(
-      (a, b) =>
-        a.date.getTime() -
-        b.date.getTime()
-    );
-
-    /*
      * ==========================================
-     * 3. SELEZIONE TEST
+     * 3. BACKTEST
      * ==========================================
      *
-     * Usiamo partite con xG.
+     * Per fare un confronto con xG abbiamo
+     * bisogno di almeno una finestra storica.
      *
-     * IMPORTANTE:
-     * una partita viene testata solo se
-     * esistono abbastanza dati xG precedenti
-     * per costruire il modello con xG.
+     * Per questa v2 usiamo solo le partite
+     * che abbiamo realmente interrogato.
+     *
+     * Non inventiamo xG mancanti.
      */
 
-    const testMatches = [];
-
-    for (
-      const match of allMatches
-    ) {
-      if (
-        testMatches.length >=
-        MAX_TEST_MATCHES
-      ) {
-        break;
-      }
-
-      /*
-       * La partita target deve avere
-       * xG post-match.
-       */
-      const target =
-        history.find(
-          item =>
-            item.id ===
-            match.id
-        );
-
-      if (!target) {
-        continue;
-      }
-
-      /*
-       * Devono esistere xG precedenti
-       * per entrambe le squadre.
-       */
-      const homePrevious =
-        getRollingTeamXG(
-          history,
-          match.homeTeam,
+    const history =
+      allMatches
+        .filter(match =>
           match.date
+        )
+        .sort(
+          (a, b) =>
+            a.date.getTime() -
+            b.date.getTime()
         );
 
-      const awayPrevious =
-        getRollingTeamXG(
-          history,
-          match.awayTeam,
-          match.date
+    const testMatches =
+      xGMatches
+        .sort(
+          (a, b) =>
+            a.date.getTime() -
+            b.date.getTime()
+        )
+        .slice(
+          0,
+          MAX_TEST_MATCHES
         );
-
-      if (
-        !homePrevious ||
-        !awayPrevious
-      ) {
-        continue;
-      }
-
-      testMatches.push(
-        match
-      );
-    }
-
-    /*
-     * ==========================================
-     * 4. METRICHE
-     * ==========================================
-     */
 
     const baselineMetrics = {
       matches: 0,
@@ -1737,27 +1449,36 @@ export default async function handler(
       const match of testMatches
     ) {
       /*
-       * SOLO partite precedenti.
-       *
-       * Questo impedisce leakage.
+       * SOLO dati precedenti alla partita.
        */
-      const previousMatches =
-        allMatches.filter(
-          previous =>
-            previous.date <
+      const previous =
+        history.filter(
+          previousMatch =>
+            previousMatch.date <
             match.date
         );
 
+      /*
+       * Baseline.
+       */
       const baseline =
-        calculateBaseline(
+        baselineModel(
           match.homeTeam,
           match.awayTeam,
-          previousMatches,
+          previous,
           match.date
         );
 
-      const withXG =
-        calculateWithXG(
+      /*
+       * Modello xG.
+       *
+       * L'xG della partita target NON
+       * viene usato per costruire la previsione.
+       * Serve esclusivamente come dato
+       * storico post-partita.
+       */
+      const xG =
+        xGModel(
           match.homeTeam,
           match.awayTeam,
           history,
@@ -1772,35 +1493,35 @@ export default async function handler(
 
       const xGMatrix =
         buildMatrix(
-          withXG.home,
-          withXG.away
+          xG.home,
+          xG.away
         );
 
       const baselineProbabilities =
-        probabilitiesFromMatrix(
+        getProbabilities(
           baselineMatrix
         );
 
       const xGProbabilities =
-        probabilitiesFromMatrix(
+        getProbabilities(
           xGMatrix
         );
 
       const actual =
-        actualClass(
+        actualResult(
           match.score
         );
 
-      addMetrics(
+      addMetric(
         baselineMetrics,
         baselineProbabilities,
         actual
       );
 
       if (
-        withXG.xGAvailable
+        xG.available
       ) {
-        addMetrics(
+        addMetric(
           xGMetrics,
           xGProbabilities,
           actual
@@ -1838,31 +1559,32 @@ export default async function handler(
             baselineProbabilities,
 
           predicted:
-            predictedClass(
+            predictedResult(
               baselineProbabilities
             ),
 
           correct:
-            predictedClass(
+            predictedResult(
               baselineProbabilities
             ) === actual
         },
 
         withXG: {
-          xGAvailable:
-            withXG.xGAvailable,
+          available:
+            xG.available,
 
           previousXGMatches:
-            withXG.xGMatches,
+            xG.previousXGMatches ||
+            0,
 
           expectedGoals: {
             home:
               Number(
-                withXG.home.toFixed(3)
+                xG.home.toFixed(3)
               ),
             away:
               Number(
-                withXG.away.toFixed(3)
+                xG.away.toFixed(3)
               )
           },
 
@@ -1870,12 +1592,12 @@ export default async function handler(
             xGProbabilities,
 
           predicted:
-            predictedClass(
+            predictedResult(
               xGProbabilities
             ),
 
           correct:
-            predictedClass(
+            predictedResult(
               xGProbabilities
             ) === actual
         }
@@ -1883,15 +1605,23 @@ export default async function handler(
     }
 
     const baselineFinal =
-      finalizeMetrics(
+      finalize(
         baselineMetrics
       );
 
     const xGFinal =
-      finalizeMetrics(
+      finalize(
         xGMetrics
       );
 
+    /*
+     * Per Brier e LogLoss:
+     * valori più bassi = meglio.
+     *
+     * Quindi:
+     * negativo = xG migliore
+     * positivo = baseline migliore
+     */
     const improvement = {
       accuracy:
         baselineFinal.accuracy !== null &&
@@ -1929,7 +1659,7 @@ export default async function handler(
 
     /*
      * ==========================================
-     * 5. RISPOSTA
+     * 4. RISPOSTA
      * ==========================================
      */
 
@@ -1950,7 +1680,7 @@ export default async function handler(
           "Baseline + rolling xG storico pre-partita",
 
         leakageProtection:
-          "Solo informazioni disponibili prima della partita target"
+          "Solo dati precedenti alla partita target"
       },
 
       dataset: {
@@ -1966,7 +1696,7 @@ export default async function handler(
         statsRequests,
 
         matchesWithXG:
-          xGMatches,
+          xGMatches.length,
 
         tested:
           testMatches.length,
@@ -1991,6 +1721,10 @@ export default async function handler(
         statsUnavailable,
         statsErrors,
 
+        rateLimited,
+
+        retryAfter,
+
         maxCandidateMatches:
           MAX_CANDIDATE_MATCHES,
 
@@ -2006,14 +1740,16 @@ export default async function handler(
         monthDiagnostics,
 
         note:
-          "Backtest esclusivamente su partite di Serie A nell'anno solare 2025. Le partite senza xG vengono escluse dal modello xG."
+          rateLimited
+            ? "BBD ha restituito 429. Il backtest si è fermato immediatamente per proteggere la quota. Rispettare Retry-After prima di una nuova esecuzione."
+            : "Versione v2: massimo 10 richieste stats per esecuzione, nessun retry automatico su 429."
       },
 
       statsDiagnostics
     });
   } catch (error) {
     console.error(
-      "BACKTEST ERROR:",
+      "BACKTEST V2 ERROR:",
       error
     );
 
@@ -2027,8 +1763,8 @@ export default async function handler(
       status:
         error?.status || null,
 
-      bbs:
-        error?.payload || null
+      retryAfter:
+        error?.retryAfter || 0
     });
   }
 }
