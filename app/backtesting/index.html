@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backtesting Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f3f4f6;
+      padding: 2rem;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 2.25rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 2rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      padding: 1.5rem;
+    }
+    .card-label {
+      font-size: 0.875rem;
+      color: #6b7280;
+      margin-bottom: 0.5rem;
+    }
+    .card-value {
+      font-size: 1.875rem;
+      font-weight: bold;
+    }
+    .blue { color: #2563eb; }
+    .green { color: #16a34a; }
+    .purple { color: #a855f7; }
+    .orange { color: #ea580c; }
+    .details {
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      padding: 1.5rem;
+    }
+    .details h2 {
+      font-size: 1.25rem;
+      font-weight: bold;
+      margin-bottom: 1rem;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+    }
+    .detail-row:not(:last-child) {
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      font-size: 1.125rem;
+    }
+    .error {
+      color: #dc2626;
+      padding: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Backtesting Dashboard</h1>
+    <p class="subtitle">Serie A Prediction Model Analysis</p>
+    
+    <div id="content" class="loading">Loading...</div>
+  </div>
+
+  <script>
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/calibrate', { method: 'POST' });
+        const data = await res.json();
+
+        if (!data.stats) {
+          document.getElementById('content').innerHTML = '<p>No data yet</p>';
+          return;
+        }
+
+        const stats = data.stats;
+        document.getElementById('content').innerHTML = `
+          <div class="grid">
+            <div class="card">
+              <div class="card-label">Global Accuracy</div>
+              <div class="card-value blue">${stats.globalAccuracy}</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Recent (Last 10)</div>
+              <div class="card-value green">${stats.recentAccuracy}</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Shrunk Accuracy</div>
+              <div class="card-value purple">${stats.shrunkenAccuracy}</div>
+            </div>
+            <div class="card">
+              <div class="card-label">MAE (Goals)</div>
+              <div class="card-value orange">${stats.mae}</div>
+            </div>
+          </div>
+
+          <div class="details">
+            <h2>Model Performance</h2>
+            <div class="detail-row">
+              <span>Total Predictions Tracked:</span>
+              <span style="font-weight: bold;">${stats.totalMatched}</span>
+            </div>
+            <div class="detail-row">
+              <span>Global Accuracy (All time):</span>
+              <span style="font-weight: bold;">${stats.globalAccuracy}</span>
+            </div>
+            <div class="detail-row">
+              <span>Recent Form (Last 10):</span>
+              <span style="font-weight: bold;">${stats.recentAccuracy}</span>
+            </div>
+            <div class="detail-row">
+              <span>Calibrated Accuracy (70% global + 30% recent):</span>
+              <span style="font-weight: bold; color: #a855f7;">${stats.shrunkenAccuracy}</span>
+            </div>
+            <div class="detail-row">
+              <span>Mean Absolute Error (Goals):</span>
+              <span style="font-weight: bold;">${stats.mae}</span>
+            </div>
+            <p style="margin-top: 1.5rem; font-size: 0.875rem; color: #6b7280;">
+              💡 <strong>Shrinkage Weight:</strong> 30% recency + 70% historical. 
+              This prevents overfitting to recent lucky runs.
+            </p>
+          </div>
+        `;
+      } catch (error) {
+        document.getElementById('content').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+      }
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>
