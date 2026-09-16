@@ -2,11 +2,11 @@
   "name": "serie-a-predictor-v5",
   "version": "1.0.0",
   "description": "Serie A prediction app",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "dev": "vercel dev",
-    "build": "vercel build",
-    "start": "vercel start"
+    "build": "vercel build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.43.0"
