@@ -2,17 +2,11 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  />
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Serie A Predictor V5</title>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     :root {
       --bg: #07111f;
@@ -31,35 +25,22 @@
       margin: 0;
       min-height: 100vh;
       background:
-        radial-gradient(
-          circle at top,
-          #102b47 0%,
-          var(--bg) 45%
-        );
+        radial-gradient(circle at top, #102b47 0%, var(--bg) 45%);
       color: var(--text);
       font-family:
-        Inter,
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
+        Inter, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
     }
 
-    button,
-    select {
-      font: inherit;
-    }
+    button, select { font: inherit; }
 
     .container {
       width: min(1180px, 94%);
-      margin: 0 auto;
+      margin: auto;
       padding: 28px 0 60px;
     }
 
-    header {
-      margin-bottom: 24px;
-    }
+    header { margin-bottom: 24px; }
 
     .brand {
       display: flex;
@@ -94,12 +75,6 @@
       color: white;
       background: var(--card2);
       cursor: pointer;
-      transition: 0.2s ease;
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-      border-color: #315d84;
     }
 
     button.primary {
@@ -110,75 +85,63 @@
     }
 
     button:disabled {
-      opacity: 0.55;
+      opacity: .55;
       cursor: not-allowed;
-      transform: none;
     }
 
     .status {
       margin: 18px 0;
       padding: 12px 15px;
       border-radius: 10px;
-      background: rgba(13, 27, 45, 0.85);
+      background: rgba(13,27,45,.85);
       border: 1px solid var(--border);
       color: var(--muted);
       font-size: 14px;
+      word-break: break-word;
     }
 
     .status.ok {
-      border-color: rgba(54, 211, 153, 0.4);
+      border-color: rgba(54,211,153,.4);
       color: var(--accent);
     }
 
     .status.error {
-      border-color: rgba(251, 113, 133, 0.45);
+      border-color: rgba(251,113,133,.45);
       color: var(--danger);
     }
 
     .grid {
       display: grid;
-      grid-template-columns:
-        repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(4,minmax(0,1fr));
       gap: 12px;
     }
 
-    @media (max-width: 900px) {
-      .grid {
-        grid-template-columns:
-          repeat(2, minmax(0, 1fr));
-      }
+    @media(max-width:900px) {
+      .grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
     }
 
-    @media (max-width: 560px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
+    @media(max-width:560px) {
+      .grid { grid-template-columns: 1fr; }
     }
 
     .card {
       background:
-        linear-gradient(
-          145deg,
-          rgba(16, 36, 59, 0.95),
-          rgba(8, 20, 34, 0.95)
-        );
+        linear-gradient(145deg,
+          rgba(16,36,59,.95),
+          rgba(8,20,34,.95));
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 18px;
-      box-shadow:
-        0 12px 35px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 12px 35px rgba(0,0,0,.2);
     }
 
-    .card h2,
-    .card h3 {
-      margin-top: 0;
-    }
+    .card h2 { margin-top: 0; }
 
     .stat-label {
       color: var(--muted);
       font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 0.8px;
+      letter-spacing: .8px;
     }
 
     .stat-value {
@@ -187,28 +150,21 @@
       font-weight: 800;
     }
 
-    .section {
-      margin-top: 18px;
-    }
+    .section { margin-top: 18px; }
 
     .controls {
       display: grid;
-      grid-template-columns:
-        1fr 1fr 1fr auto;
+      grid-template-columns: 1fr 1fr 1fr auto;
       gap: 12px;
       align-items: end;
     }
 
-    @media (max-width: 800px) {
-      .controls {
-        grid-template-columns: 1fr 1fr;
-      }
+    @media(max-width:800px) {
+      .controls { grid-template-columns: 1fr 1fr; }
     }
 
-    @media (max-width: 520px) {
-      .controls {
-        grid-template-columns: 1fr;
-      }
+    @media(max-width:520px) {
+      .controls { grid-template-columns: 1fr; }
     }
 
     label {
@@ -226,10 +182,6 @@
       background: #091728;
       color: white;
       outline: none;
-    }
-
-    select:focus {
-      border-color: var(--accent2);
     }
 
     .match-header {
@@ -252,11 +204,9 @@
     }
 
     .model-badge {
-      display: inline-flex;
-      align-items: center;
       padding: 7px 10px;
       border-radius: 999px;
-      background: rgba(56, 189, 248, 0.12);
+      background: rgba(56,189,248,.12);
       color: var(--accent2);
       font-size: 12px;
       font-weight: 700;
@@ -272,7 +222,7 @@
     .xg-box {
       padding: 14px;
       border-radius: 12px;
-      background: rgba(0, 0, 0, 0.18);
+      background: rgba(0,0,0,.18);
       border: 1px solid var(--border);
     }
 
@@ -282,8 +232,14 @@
       margin-top: 4px;
     }
 
-    .confidence {
-      margin-top: 15px;
+    .confidence { margin-top: 15px; }
+
+    .confidence-label {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 7px;
     }
 
     .confidence-bar {
@@ -296,17 +252,9 @@
 
     .confidence-fill {
       height: 100%;
-      width: 0%;
+      width: 0;
       background: var(--accent);
-      transition: width 0.35s ease;
-    }
-
-    .confidence-label {
-      display: flex;
-      justify-content: space-between;
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 7px;
+      transition: width .35s;
     }
 
     .tabs {
@@ -330,39 +278,28 @@
       font-weight: 800;
     }
 
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
 
     .market-grid {
       display: grid;
-      grid-template-columns:
-        repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(3,minmax(0,1fr));
       gap: 10px;
     }
 
-    @media (max-width: 700px) {
-      .market-grid {
-        grid-template-columns:
-          repeat(2, minmax(0, 1fr));
-      }
+    @media(max-width:700px) {
+      .market-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
     }
 
-    @media (max-width: 450px) {
-      .market-grid {
-        grid-template-columns: 1fr;
-      }
+    @media(max-width:450px) {
+      .market-grid { grid-template-columns: 1fr; }
     }
 
     .market {
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 13px;
-      background: rgba(0, 0, 0, 0.14);
+      background: rgba(0,0,0,.14);
     }
 
     .market-name {
@@ -389,14 +326,13 @@
 
     .score-row {
       display: grid;
-      grid-template-columns:
-        65px 1fr 70px;
+      grid-template-columns: 65px 1fr 70px;
       align-items: center;
       gap: 10px;
       padding: 10px 12px;
       border-radius: 10px;
       border: 1px solid var(--border);
-      background: rgba(0, 0, 0, 0.14);
+      background: rgba(0,0,0,.14);
     }
 
     .score {
@@ -428,8 +364,7 @@
       font-size: 13px;
     }
 
-    th,
-    td {
+    th, td {
       padding: 10px 8px;
       border-bottom: 1px solid var(--border);
       text-align: left;
@@ -466,1525 +401,1022 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+
+    .loading {
+      opacity: .7;
+    }
   </style>
 </head>
 
 <body>
-  <main class="container">
+<main class="container">
 
-    <header>
-      <div class="brand">
-        <div>
-          <h1>Serie A Predictor V5</h1>
-          <div class="subtitle">
-            Poisson + Dixon-Coles · Big Balls Sports Data
-          </div>
-        </div>
-
-        <div class="actions">
-          <button
-            id="syncBtn"
-            class="primary"
-          >
-            ↻ Sincronizza BBD
-          </button>
+  <header>
+    <div class="brand">
+      <div>
+        <h1>Serie A Predictor V5</h1>
+        <div class="subtitle">
+          Poisson + Dixon-Coles · Big Balls Sports Data
         </div>
       </div>
-    </header>
 
-    <div
-      id="status"
-      class="status"
-    >
-      Pronto.
+      <div class="actions">
+        <button id="syncBtn" class="primary">
+          ↻ Sincronizza BBD
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="status" class="status">
+    Applicazione pronta.
+  </div>
+
+  <section class="grid">
+
+    <div class="card">
+      <div class="stat-label">Match</div>
+      <div id="coverageMatches" class="stat-value">—</div>
     </div>
 
-    <!-- COVERAGE -->
+    <div class="card">
+      <div class="stat-label">xG</div>
+      <div id="coverageXG" class="stat-value">—</div>
+    </div>
 
-    <section class="grid">
+    <div class="card">
+      <div class="stat-label">Lineups</div>
+      <div id="coverageLineups" class="stat-value">—</div>
+    </div>
 
-      <div class="card">
-        <div class="stat-label">
-          Match
-        </div>
-        <div
-          id="coverageMatches"
-          class="stat-value"
-        >
-          —
-        </div>
+    <div class="card">
+      <div class="stat-label">Standings</div>
+      <div id="coverageStandings" class="stat-value">—</div>
+    </div>
+
+  </section>
+
+  <section class="section card">
+
+    <h2>Seleziona partita</h2>
+
+    <div class="controls">
+
+      <div>
+        <label for="homeTeam">Casa</label>
+        <select id="homeTeam"></select>
       </div>
 
-      <div class="card">
-        <div class="stat-label">
-          xG
-        </div>
-        <div
-          id="coverageXG"
-          class="stat-value"
-        >
-          —
-        </div>
+      <div>
+        <label for="awayTeam">Trasferta</label>
+        <select id="awayTeam"></select>
       </div>
 
-      <div class="card">
-        <div class="stat-label">
-          Lineups
-        </div>
-        <div
-          id="coverageLineups"
-          class="stat-value"
-        >
-          —
-        </div>
+      <div>
+        <label for="competition">Competizione</label>
+
+        <select id="competition">
+          <option value="seriea">Serie A</option>
+          <option value="coppa">Coppa Italia</option>
+        </select>
       </div>
 
-      <div class="card">
-        <div class="stat-label">
-          Standings
-        </div>
-        <div
-          id="coverageStandings"
-          class="stat-value"
-        >
-          —
-        </div>
+      <button id="predictBtn" class="primary">
+        Prevedi
+      </button>
+
+    </div>
+
+  </section>
+
+  <section class="section card">
+
+    <div class="match-header">
+
+      <div id="matchTitle" class="teams">
+        Inter <span class="vs">vs</span> Milan
       </div>
 
-    </section>
-
-    <!-- CONTROLS -->
-
-    <section class="section card">
-
-      <h2>Seleziona partita</h2>
-
-      <div class="controls">
-
-        <div>
-          <label for="homeTeam">
-            Casa
-          </label>
-
-          <select id="homeTeam"></select>
-        </div>
-
-        <div>
-          <label for="awayTeam">
-            Trasferta
-          </label>
-
-          <select id="awayTeam"></select>
-        </div>
-
-        <div>
-          <label for="competition">
-            Competizione
-          </label>
-
-          <select id="competition">
-            <option value="seriea">
-              Serie A
-            </option>
-
-            <option value="coppa">
-              Coppa Italia
-            </option>
-          </select>
-        </div>
-
-        <button
-          id="predictBtn"
-          class="primary"
-        >
-          Prevedi
-        </button>
-
-      </div>
-    </section>
-
-    <!-- PREDICTION -->
-
-    <section class="section card">
-
-      <div class="match-header">
-
-        <div
-          id="matchTitle"
-          class="teams"
-        >
-          Seleziona le squadre
-        </div>
-
-        <div
-          id="modelBadge"
-          class="model-badge"
-        >
-          Modello V5
-        </div>
-
+      <div id="modelBadge" class="model-badge">
+        Modello V5
       </div>
 
-      <div class="xg-row">
+    </div>
 
-        <div class="xg-box">
-          <div class="stat-label">
-            xG Casa
-          </div>
+    <div class="xg-row">
 
-          <div
-            id="homeXG"
-            class="xg-number"
-          >
-            —
-          </div>
-        </div>
-
-        <div class="xg-box">
-          <div class="stat-label">
-            xG Trasferta
-          </div>
-
-          <div
-            id="awayXG"
-            class="xg-number"
-          >
-            —
-          </div>
-        </div>
-
+      <div class="xg-box">
+        <div class="stat-label">xG Casa</div>
+        <div id="homeXG" class="xg-number">—</div>
       </div>
 
-      <div class="confidence">
+      <div class="xg-box">
+        <div class="stat-label">xG Trasferta</div>
+        <div id="awayXG" class="xg-number">—</div>
+      </div>
 
-        <div class="confidence-label">
-          <span>
-            Confidence
-          </span>
+    </div>
 
-          <span id="confidenceText">
-            —
-          </span>
+    <div class="confidence">
+
+      <div class="confidence-label">
+        <span>Confidence</span>
+        <span id="confidenceText">—</span>
+      </div>
+
+      <div class="confidence-bar">
+        <div id="confidenceFill" class="confidence-fill"></div>
+      </div>
+
+    </div>
+
+    <div class="small" style="margin-top:10px;">
+      Fonte xG:
+      <strong id="xgSource">—</strong>
+    </div>
+
+  </section>
+
+  <section class="section card">
+
+    <div class="tabs">
+
+      <button class="tab active" data-tab="markets">
+        Mercati
+      </button>
+
+      <button class="tab" data-tab="scores">
+        Risultati esatti
+      </button>
+
+      <button class="tab" data-tab="lineups">
+        Lineups
+      </button>
+
+      <button class="tab" data-tab="standings">
+        Classifica
+      </button>
+
+      <button class="tab" data-tab="debug">
+        Debug
+      </button>
+
+    </div>
+
+    <div id="tab-markets" class="tab-content active">
+      <div id="markets" class="market-grid">
+        <div class="empty">
+          Premi "Prevedi" per calcolare i mercati.
         </div>
+      </div>
+    </div>
 
-        <div class="confidence-bar">
-          <div
-            id="confidenceFill"
-            class="confidence-fill"
-          ></div>
+    <div id="tab-scores" class="tab-content">
+      <div id="scores" class="score-list">
+        <div class="empty">
+          Nessun risultato esatto.
         </div>
+      </div>
+    </div>
 
+    <div id="tab-lineups" class="tab-content">
+      <div id="lineups" class="empty">
+        Nessuna formazione caricata.
+      </div>
+    </div>
+
+    <div id="tab-standings" class="tab-content">
+      <div id="standings" class="empty">
+        Classifica non disponibile.
+      </div>
+    </div>
+
+    <div id="tab-debug" class="tab-content">
+      <div class="small">
+        Diagnostica.
       </div>
 
-      <div class="small" style="margin-top:10px;">
-        Fonte xG:
-        <strong id="xgSource">
-          —
-        </strong>
-      </div>
+      <pre id="debug" class="json-box">Nessun dato.</pre>
+    </div>
 
-    </section>
+  </section>
 
-    <!-- RESULTS -->
+</main>
 
-    <section class="section card">
+<script>
+"use strict";
 
-      <div class="tabs">
+/* =========================================================
+   STATE
+========================================================= */
 
-        <button
-          class="tab active"
-          data-tab="markets"
-        >
-          Mercati
-        </button>
+const state = {
+  matches: [],
+  standings: [],
+  teamXG: {},
+  lineups: [],
+  syncData: null,
+  prediction: null
+};
 
-        <button
-          class="tab"
-          data-tab="scores"
-        >
-          Risultati esatti
-        </button>
+/* =========================================================
+   TEAMS
+========================================================= */
 
-        <button
-          class="tab"
-          data-tab="lineups"
-        >
-          Lineups
-        </button>
+const serieATeams = [
+  "Atalanta",
+  "Bologna",
+  "Cagliari",
+  "Como",
+  "Fiorentina",
+  "Frosinone",
+  "Genoa",
+  "Inter",
+  "Juventus",
+  "Lazio",
+  "Lecce",
+  "Milan",
+  "Monza",
+  "Napoli",
+  "Parma",
+  "Roma",
+  "Sassuolo",
+  "Torino",
+  "Udinese",
+  "Venezia"
+];
 
-        <button
-          class="tab"
-          data-tab="standings"
-        >
-          Classifica
-        </button>
+/* =========================================================
+   HELPERS
+========================================================= */
 
-        <button
-          class="tab"
-          data-tab="debug"
-        >
-          Debug
-        </button>
+function el(id) {
+  return document.getElementById(id);
+}
 
-      </div>
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
-      <!-- MARKETS -->
+function number(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
 
-      <div
-        id="tab-markets"
-        class="tab-content active"
-      >
+function formatPercent(value) {
+  const n = number(value);
 
-        <div
-          id="markets"
-          class="market-grid"
-        >
-          <div class="empty">
-            Nessuna previsione disponibile.
-          </div>
-        </div>
+  if (n === null) return "—";
 
-      </div>
+  return `${(n * 100).toFixed(1)}%`;
+}
 
-      <!-- SCORES -->
+function formatOdd(value) {
+  const n = number(value);
 
-      <div
-        id="tab-scores"
-        class="tab-content"
-      >
+  if (n === null || n <= 0) return "—";
 
-        <div
-          id="scores"
-          class="score-list"
-        >
-          <div class="empty">
-            Nessuna previsione disponibile.
-          </div>
-        </div>
+  return n.toFixed(2);
+}
 
-      </div>
+function setStatus(message, type = "") {
+  const node = el("status");
 
-      <!-- LINEUPS -->
+  node.textContent = message;
+  node.className = `status ${type}`;
+}
 
-      <div
-        id="tab-lineups"
-        class="tab-content"
-      >
+function normalize(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
-        <div
-          id="lineups"
-          class="empty"
-        >
-          Nessuna formazione disponibile.
-        </div>
+function canonicalTeamName(value) {
+  const name = normalize(value);
 
-      </div>
+  const aliases = {
+    "inter milan": "inter",
+    "internazionale": "inter",
+    "inter": "inter",
 
-      <!-- STANDINGS -->
+    "como 1907": "como",
+    "como": "como",
 
-      <div
-        id="tab-standings"
-        class="tab-content"
-      >
+    "as roma": "roma",
+    "roma": "roma",
 
-        <div
-          id="standings"
-          class="empty"
-        >
-          Nessuna classifica disponibile.
-        </div>
+    "ac milan": "milan",
+    "milan": "milan",
 
-      </div>
+    "venezia fc": "venezia",
+    "venezia": "venezia"
+  };
 
-      <!-- DEBUG -->
+  return aliases[name] || name;
+}
 
-      <div
-        id="tab-debug"
-        class="tab-content"
-      >
+function sameTeam(a, b) {
+  const x = canonicalTeamName(a);
+  const y = canonicalTeamName(b);
 
-        <div class="small">
-          Diagnostica ultima sincronizzazione.
-        </div>
+  return x && y && x === y;
+}
 
-        <pre
-          id="debug"
-          class="json-box"
-        >Nessun dato.</pre>
+function getTeamName(value) {
+  if (!value) return "";
 
-      </div>
+  if (typeof value === "string") {
+    return value;
+  }
 
-    </section>
+  return (
+    value.name ||
+    value.team_name ||
+    value.teamName ||
+    value.short_name ||
+    ""
+  );
+}
 
-  </main>
+/* =========================================================
+   SELECTS
+========================================================= */
 
-  <script>
-    /*
-     * ============================================
-     * STATE
-     * ============================================
-     */
+function populateTeams() {
+  const home = el("homeTeam");
+  const away = el("awayTeam");
 
-    const state = {
-      matches: [],
-      standings: [],
-      syncData: null,
-      prediction: null,
+  home.innerHTML = "";
+  away.innerHTML = "";
+
+  serieATeams.forEach(team => {
+    home.add(new Option(team, team));
+    away.add(new Option(team, team));
+  });
+
+  home.value = "Inter";
+  away.value = "Milan";
+}
+
+/* =========================================================
+   BBD MATCH NORMALIZATION
+========================================================= */
+
+function normalizeMatch(raw) {
+  if (!raw) return null;
+
+  return {
+    id: raw.id || raw.match_id || raw.matchId || null,
+
+    homeTeam: getTeamName(raw.home),
+    awayTeam: getTeamName(raw.away),
+
+    kickoff:
+      raw.kickoff_utc ||
+      raw.kickoff ||
+      raw.start_time ||
+      null,
+
+    status: raw.status || null,
+
+    score: raw.score || null,
+
+    raw
+  };
+}
+
+function findMatch(home, away) {
+  const list = state.matches
+    .map(normalizeMatch)
+    .filter(Boolean);
+
+  return (
+    list.find(match =>
+      sameTeam(match.homeTeam, home) &&
+      sameTeam(match.awayTeam, away)
+    ) || null
+  );
+}
+
+/* =========================================================
+   API JSON
+========================================================= */
+
+async function readJson(response) {
+  const text = await response.text();
+
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(
+      `Risposta non JSON dal server (${response.status}): ${text.slice(0, 300)}`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error ||
+      data?.message ||
+      `HTTP ${response.status}`
+    );
+  }
+
+  return data;
+}
+
+/* =========================================================
+   SYNC
+========================================================= */
+
+async function syncData() {
+  const button = el("syncBtn");
+
+  button.disabled = true;
+
+  setStatus(
+    "Connessione a Big Balls Sports Data...",
+    ""
+  );
+
+  try {
+    const response = await fetch(
+      `/api/sync?ts=${Date.now()}`,
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          "Accept": "application/json"
+        }
+      }
+    );
+
+    const data = await readJson(response);
+
+    if (!data.ok) {
+      throw new Error(
+        data.error || "Sync non riuscito"
+      );
+    }
+
+    state.syncData = data;
+
+    state.matches = Array.isArray(data.matches)
+      ? data.matches
+      : [];
+
+    state.standings = Array.isArray(data.standings)
+      ? data.standings
+      : [];
+
+    state.teamXG =
+      data.teamXG &&
+      typeof data.teamXG === "object"
+        ? data.teamXG
+        : {};
+
+    state.lineups = Array.isArray(data.lineups)
+      ? data.lineups
+      : [];
+
+    updateCoverage();
+
+    el("debug").textContent =
+      JSON.stringify(data, null, 2);
+
+    renderStandings();
+
+    setStatus(
+      `BBD OK · ${state.matches.length} match · ${
+        data.coverage?.xG ?? 0
+      } righe xG · ${
+        data.coverage?.teamsWithXG ?? 0
+      } squadre con xG`,
+      "ok"
+    );
+
+    await predict();
+
+  } catch (error) {
+    console.error(error);
+
+    setStatus(
+      `Errore: ${error.message}`,
+      "error"
+    );
+
+    el("debug").textContent =
+      String(error.stack || error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+/* =========================================================
+   COVERAGE
+========================================================= */
+
+function updateCoverage() {
+  const coverage = state.syncData?.coverage || {};
+
+  el("coverageMatches").textContent =
+    coverage.matches ?? state.matches.length;
+
+  el("coverageXG").textContent =
+    coverage.xG ?? 0;
+
+  el("coverageLineups").textContent =
+    coverage.lineups ?? state.lineups.length;
+
+  el("coverageStandings").textContent =
+    state.standings.length;
+}
+
+/* =========================================================
+   PREDICT
+========================================================= */
+
+async function predict() {
+  const home = el("homeTeam").value;
+  const away = el("awayTeam").value;
+  const competition = el("competition").value;
+
+  if (!home || !away) return;
+
+  if (sameTeam(home, away)) {
+    setStatus(
+      "Casa e trasferta devono essere squadre diverse.",
+      "error"
+    );
+    return;
+  }
+
+  const match = findMatch(home, away);
+
+  const payload = {
+    homeTeam: home,
+    awayTeam: away,
+    competition,
+    match: match?.raw || null
+  };
+
+  /*
+   * Passiamo anche i dati xG aggregati al backend.
+   * Questo permette a predict.js di usarli se previsto
+   * dalla sua implementazione.
+   */
+
+  const homeXGEntry =
+    Object.values(state.teamXG)
+      .find(item => sameTeam(item?.team, home));
+
+  const awayXGEntry =
+    Object.values(state.teamXG)
+      .find(item => sameTeam(item?.team, away));
+
+  if (homeXGEntry || awayXGEntry) {
+    payload.teamXG = {
+      home: homeXGEntry || null,
+      away: awayXGEntry || null
     };
+  }
 
-    /*
-     * ============================================
-     * TEAM LIST
-     * ============================================
-     */
+  setStatus(
+    "Calcolo previsione...",
+    ""
+  );
 
-    const serieATeams = [
-      "Atalanta",
-      "Bologna",
-      "Cagliari",
-      "Como",
-      "Fiorentina",
-      "Frosinone",
-      "Genoa",
-      "Inter",
-      "Juventus",
-      "Lazio",
-      "Lecce",
-      "Milan",
-      "Monza",
-      "Napoli",
-      "Parma",
-      "Roma",
-      "Sassuolo",
-      "Torino",
-      "Udinese",
-      "Venezia"
-    ];
-
-    /*
-     * ============================================
-     * HELPERS
-     * ============================================
-     */
-
-    function el(id) {
-      return document.getElementById(id);
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
-    function formatPercent(value) {
-      const number = Number(value);
-
-      if (!Number.isFinite(number)) {
-        return "—";
+  try {
+    const response = await fetch(
+      "/api/predict",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(payload)
       }
+    );
 
-      return `${(
-        number * 100
-      ).toFixed(1)}%`;
-    }
+    const data = await readJson(response);
 
-    function formatOdd(value) {
-      const number = Number(value);
-
-      if (!Number.isFinite(number)) {
-        return "—";
-      }
-
-      return number.toFixed(2);
-    }
-
-    function setStatus(
-      message,
-      type = ""
-    ) {
-      const status =
-        el("status");
-
-      status.textContent =
-        message;
-
-      status.className =
-        `status ${type}`;
-    }
-
-    /*
-     * ============================================
-     * TEAM NORMALIZATION
-     * ============================================
-     */
-
-    function normalize(value) {
-      return String(value || "")
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(
-          /[\u0300-\u036f]/g,
-          ""
-        )
-        .replace(
-          /\b(fc|ac|as|ssc|us)\b/g,
-          ""
-        )
-        .replace(
-          /\s+/g,
-          " "
-        )
-        .trim();
-    }
-
-    function canonicalTeamName(value) {
-      const name =
-        normalize(value);
-
-      const aliases = {
-        "inter milan":
-          "inter",
-
-        "internazionale":
-          "inter",
-
-        "como 1907":
-          "como",
-
-        "as roma":
-          "roma",
-
-        "ac milan":
-          "milan",
-
-        "venezia fc":
-          "venezia"
-      };
-
-      return (
-        aliases[name] ||
-        name
+    if (!data.ok) {
+      throw new Error(
+        data.error || "Previsione non disponibile"
       );
     }
 
-    function sameTeam(
-      a,
-      b
-    ) {
-      return (
-        canonicalTeamName(a) ===
-        canonicalTeamName(b)
-      );
-    }
+    state.prediction = data;
 
-    /*
-     * ============================================
-     * SELECTS
-     * ============================================
-     */
+    renderPrediction(data, match);
 
-    function populateTeams() {
-      const home =
-        el("homeTeam");
-
-      const away =
-        el("awayTeam");
-
-      home.innerHTML = "";
-      away.innerHTML = "";
-
-      serieATeams.forEach(
-        (team) => {
-          const option1 =
-            document.createElement(
-              "option"
-            );
-
-          option1.value =
-            team;
-
-          option1.textContent =
-            team;
-
-          home.appendChild(
-            option1
-          );
-
-          const option2 =
-            document.createElement(
-              "option"
-            );
-
-          option2.value =
-            team;
-
-          option2.textContent =
-            team;
-
-          away.appendChild(
-            option2
-          );
-        }
-      );
-
-      home.value =
-        "Inter";
-
-      away.value =
-        "Milan";
-    }
-
-    /*
-     * ============================================
-     * FIND MATCH
-     * ============================================
-     */
-
-    function findMatch(
-      home,
-      away
-    ) {
-      if (
-        !Array.isArray(
-          state.matches
-        )
-      ) {
-        return null;
-      }
-
-      return (
-        state.matches.find(
-          (match) => {
-            return (
-              sameTeam(
-                match.homeTeam,
-                home
-              ) &&
-              sameTeam(
-                match.awayTeam,
-                away
-              )
-            );
-          }
-        ) || null
-      );
-    }
-
-    /*
-     * ============================================
-     * SYNC
-     * ============================================
-     */
-
-    async function syncData() {
-      const button =
-        el("syncBtn");
-
-      button.disabled = true;
-
-      setStatus(
-        "Sincronizzazione con Big Balls Sports Data...",
-        ""
-      );
-
-      try {
-        const response =
-          await fetch(
-            `/api/sync?ts=${Date.now()}`,
-            {
-              method: "GET",
-              cache: "no-store"
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (
-          !response.ok ||
-          !data.ok
-        ) {
-          throw new Error(
-            data.message ||
-            data.error ||
-            `HTTP ${response.status}`
-          );
-        }
-
-        state.syncData =
-          data;
-
-        state.matches =
-          Array.isArray(
-            data.matches
-          )
-            ? data.matches
-            : [];
-
-        state.standings =
-          Array.isArray(
-            data.standings
-          )
-            ? data.standings
-            : [];
-
-        updateCoverage();
-
-        el("debug")
-          .textContent =
-          JSON.stringify(
-            data,
-            null,
-            2
-          );
-
-        const coverage =
-          data.coverage ||
-          {};
-
-        setStatus(
-          `BBD sincronizzato: ${coverage.matches ?? 0} match · ${coverage.xG ?? 0} xG · ${coverage.lineups ?? 0} lineups`,
-          "ok"
-        );
-
-        renderStandings();
-
-        await predict();
-
-      } catch (error) {
-        console.error(
-          "Sync error:",
-          error
-        );
-
-        setStatus(
-          `Errore sync: ${error.message}`,
-          "error"
-        );
-      } finally {
-        button.disabled =
-          false;
-      }
-    }
-
-    /*
-     * ============================================
-     * COVERAGE
-     * ============================================
-     */
-
-    function updateCoverage() {
-      const coverage =
-        state.syncData?.coverage ||
-        {};
-
-      el(
-        "coverageMatches"
-      ).textContent =
-        coverage.matches ??
-        state.matches.length ??
-        0;
-
-      el(
-        "coverageXG"
-      ).textContent =
-        coverage.xG ?? 0;
-
-      el(
-        "coverageLineups"
-      ).textContent =
-        coverage.lineups ?? 0;
-
-      el(
-        "coverageStandings"
-      ).textContent =
-        state.standings.length;
-    }
-
-    /*
-     * ============================================
-     * PREDICT
-     * ============================================
-     */
-
-    async function predict() {
-      const home =
-        el("homeTeam").value;
-
-      const away =
-        el("awayTeam").value;
-
-      const competition =
-        el("competition").value;
-
-      if (!home || !away) {
-        return;
-      }
-
-      if (
-        sameTeam(
-          home,
-          away
-        )
-      ) {
-        setStatus(
-          "La squadra di casa e quella ospite devono essere diverse.",
-          "error"
-        );
-
-        return;
-      }
-
-      const match =
-        findMatch(
-          home,
-          away
-        );
-
-      const payload = {
-        homeTeam: home,
-        awayTeam: away,
-
-        // IMPORTANTE:
-        // ora competition arriva al backend.
-        competition,
-
-        match:
-          match || null
-      };
-
-      // Se il match BBD contiene xG,
-      // li passiamo esplicitamente.
-      if (
-        match?.xG
-      ) {
-        payload.homeXG =
-          match.xG.homeXG;
-
-        payload.awayXG =
-          match.xG.awayXG;
-      }
-
-      // Lineups
-      if (
-        match?.lineups
-      ) {
-        payload.match = {
-          ...payload.match,
-          lineups:
-            match.lineups
-        };
-      }
-
-      setStatus(
-        "Calcolo previsione...",
-        ""
-      );
-
-      try {
-        const response =
-          await fetch(
-            "/api/predict",
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json"
-              },
-
-              body:
-                JSON.stringify(
-                  payload
-                )
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (
-          !response.ok ||
-          !data.ok
-        ) {
-          throw new Error(
-            data.message ||
-            data.error ||
-            `HTTP ${response.status}`
-          );
-        }
-
-        state.prediction =
-          data;
-
-        renderPrediction(
-          data,
-          match
-        );
-
-        setStatus(
-          match
-            ? `Previsione aggiornata · match BBD trovato: ${match.homeTeam} - ${match.awayTeam}`
-            : "Previsione aggiornata · match BBD non trovato, usato fallback model.",
-          "ok"
-        );
-
-      } catch (error) {
-        console.error(
-          "Prediction error:",
-          error
-        );
-
-        setStatus(
-          `Errore previsione: ${error.message}`,
-          "error"
-        );
-      }
-    }
-
-    /*
-     * ============================================
-     * RENDER PREDICTION
-     * ============================================
-     */
-
-    function renderPrediction(
-      data,
+    setStatus(
       match
-    ) {
-      const home =
-        data.match?.homeTeam ||
-        el("homeTeam").value;
+        ? `Previsione aggiornata · ${home} - ${away}`
+        : `Previsione aggiornata · dati partita non presenti nel feed BBD`,
+      "ok"
+    );
 
-      const away =
-        data.match?.awayTeam ||
-        el("awayTeam").value;
+  } catch (error) {
+    console.error(error);
 
-      el("matchTitle")
-        .innerHTML =
-        `${escapeHtml(home)}
-        <span class="vs">vs</span>
-        ${escapeHtml(away)}`;
+    setStatus(
+      `Errore previsione: ${error.message}`,
+      "error"
+    );
+  }
+}
 
-      el("modelBadge")
-        .textContent =
-        `${data.model?.name || "Model"} · ${
-          data.model?.competition ||
-          "seriea"
-        }`;
+/* =========================================================
+   RENDER PREDICTION
+========================================================= */
 
-      el("homeXG")
-        .textContent =
-        data.expectedGoals?.home ??
-        "—";
+function renderPrediction(data, match) {
+  const home =
+    data.match?.homeTeam ||
+    data.homeTeam ||
+    el("homeTeam").value;
 
-      el("awayXG")
-        .textContent =
-        data.expectedGoals?.away ??
-        "—";
+  const away =
+    data.match?.awayTeam ||
+    data.awayTeam ||
+    el("awayTeam").value;
 
-      el("xgSource")
-        .textContent =
-        data.xgSource ||
-        "—";
+  el("matchTitle").innerHTML =
+    `${escapeHtml(home)}
+     <span class="vs">vs</span>
+     ${escapeHtml(away)}`;
 
-      const confidence =
-        Number(
-          data.confidence
-        );
+  el("modelBadge").textContent =
+    `${data.model?.name || "Poisson + Dixon-Coles"}
+     · ${data.model?.competition || el("competition").value}`;
 
-      if (
-        Number.isFinite(
-          confidence
-        )
-      ) {
-        el(
-          "confidenceText"
-        ).textContent =
-          `${confidence}%`;
+  el("homeXG").textContent =
+    data.expectedGoals?.home ??
+    data.xg?.home ??
+    "—";
 
-        el(
-          "confidenceFill"
-        ).style.width =
-          `${Math.max(
-            0,
-            Math.min(
-              100,
-              confidence
-            )
-          )}%`;
-      } else {
-        el(
-          "confidenceText"
-        ).textContent =
-          "—";
+  el("awayXG").textContent =
+    data.expectedGoals?.away ??
+    data.xg?.away ??
+    "—";
 
-        el(
-          "confidenceFill"
-        ).style.width =
-          "0%";
-      }
+  el("xgSource").textContent =
+    data.xgSource ||
+    "BBD / modello";
 
-      renderMarkets(data);
+  const confidence =
+    number(data.confidence);
 
-      renderScores(data);
+  if (confidence !== null) {
+    el("confidenceText").textContent =
+      `${confidence}%`;
 
-      renderLineups(match);
-    }
+    el("confidenceFill").style.width =
+      `${Math.max(0, Math.min(100, confidence))}%`;
+  } else {
+    el("confidenceText").textContent = "—";
+    el("confidenceFill").style.width = "0%";
+  }
 
-    /*
-     * ============================================
-     * MARKETS
-     * ============================================
-     */
+  renderMarkets(data);
+  renderScores(data);
+  renderLineups(match);
+}
 
-    function addMarket(
-      list,
-      name,
-      probability,
-      odd
-    ) {
-      list.push({
-        name,
-        probability,
-        odd
-      });
-    }
+/* =========================================================
+   MARKETS
+========================================================= */
 
-    function renderMarkets(
-      data
-    ) {
-      const markets =
-        data.probabilities;
+function renderMarkets(data) {
+  const p = data.probabilities || {};
+  const odds = data.fairOdds || {};
 
-      const odds =
-        data.fairOdds || {};
+  const items = [
+    ["1 · Casa", p.homeWin, odds["1"]],
+    ["X · Pareggio", p.draw, odds["X"]],
+    ["2 · Trasferta", p.awayWin, odds["2"]],
 
-      if (!markets) {
-        el("markets")
-          .innerHTML =
-          `<div class="empty">
-            Nessun mercato disponibile.
-          </div>`;
+    ["1X", p.doubleChance?.["1X"], odds["1X"]],
+    ["X2", p.doubleChance?.["X2"], odds["X2"]],
+    ["12", p.doubleChance?.["12"], odds["12"]],
 
-        return;
-      }
+    ["Over 1.5", p.overUnder?.["over1.5"], odds["Over 1.5"]],
+    ["Under 1.5", p.overUnder?.["under1.5"], odds["Under 1.5"]],
 
-      const list = [];
+    ["Over 2.5", p.overUnder?.["over2.5"], odds["Over 2.5"]],
+    ["Under 2.5", p.overUnder?.["under2.5"], odds["Under 2.5"]],
 
-      addMarket(
-        list,
-        "1 · Casa",
-        markets.homeWin,
-        odds["1"]
-      );
+    ["Over 3.5", p.overUnder?.["over3.5"], odds["Over 3.5"]],
+    ["Under 3.5", p.overUnder?.["under3.5"], odds["Under 3.5"]],
 
-      addMarket(
-        list,
-        "X · Pareggio",
-        markets.draw,
-        odds["X"]
-      );
+    ["BTTS Yes", p.btts?.yes, odds["BTTS Yes"]],
+    ["BTTS No", p.btts?.no, odds["BTTS No"]]
+  ];
 
-      addMarket(
-        list,
-        "2 · Trasferta",
-        markets.awayWin,
-        odds["2"]
-      );
-
-      addMarket(
-        list,
-        "1X",
-        markets.doubleChance?.["1X"],
-        odds["1X"]
-      );
-
-      addMarket(
-        list,
-        "X2",
-        markets.doubleChance?.["X2"],
-        odds["X2"]
-      );
-
-      addMarket(
-        list,
-        "12",
-        markets.doubleChance?.["12"],
-        odds["12"]
-      );
-
-      addMarket(
-        list,
-        "Over 1.5",
-        markets.overUnder?.["over1.5"],
-        odds["Over 1.5"]
-      );
-
-      addMarket(
-        list,
-        "Under 1.5",
-        markets.overUnder?.["under1.5"],
-        odds["Under 1.5"]
-      );
-
-      addMarket(
-        list,
-        "Over 2.5",
-        markets.overUnder?.["over2.5"],
-        odds["Over 2.5"]
-      );
-
-      addMarket(
-        list,
-        "Under 2.5",
-        markets.overUnder?.["under2.5"],
-        odds["Under 2.5"]
-      );
-
-      addMarket(
-        list,
-        "Over 3.5",
-        markets.overUnder?.["over3.5"],
-        odds["Over 3.5"]
-      );
-
-      addMarket(
-        list,
-        "Under 3.5",
-        markets.overUnder?.["under3.5"],
-        odds["Under 3.5"]
-      );
-
-      addMarket(
-        list,
-        "BTTS Yes",
-        markets.btts?.yes,
-        odds["BTTS Yes"]
-      );
-
-      addMarket(
-        list,
-        "BTTS No",
-        markets.btts?.no,
-        odds["BTTS No"]
-      );
-
-      el("markets")
-        .innerHTML =
-        list
-          .map(
-            (item) => `
-              <div class="market">
-                <div class="market-name">
-                  ${escapeHtml(item.name)}
-                </div>
-
-                <div class="market-prob">
-                  ${formatPercent(
-                    item.probability
-                  )}
-                </div>
-
-                <div class="market-odd">
-                  Fair odds:
-                  ${formatOdd(
-                    item.odd
-                  )}
-                </div>
-              </div>
-            `
-          )
-          .join("");
-    }
-
-    /*
-     * ============================================
-     * EXACT SCORES
-     * ============================================
-     */
-
-    function renderScores(
-      data
-    ) {
-      const scores =
-        Array.isArray(
-          data.exactScores
-        )
-          ? data.exactScores
-          : [];
-
-      if (!scores.length) {
-        el("scores")
-          .innerHTML =
-          `<div class="empty">
-            Nessun risultato esatto.
-          </div>`;
-
-        return;
-      }
-
-      const max =
-        Math.max(
-          ...scores.map(
-            (item) =>
-              Number(
-                item.probability
-              ) || 0
-          )
-        );
-
-      el("scores")
-        .innerHTML =
-        scores
-          .map(
-            (item) => {
-              const probability =
-                Number(
-                  item.probability
-                ) || 0;
-
-              const width =
-                max > 0
-                  ? (
-                      probability /
-                      max
-                    ) * 100
-                  : 0;
-
-              return `
-                <div class="score-row">
-
-                  <div class="score">
-                    ${escapeHtml(
-                      item.score
-                    )}
-                  </div>
-
-                  <div class="score-bar">
-                    <div
-                      class="score-fill"
-                      style="width:${width}%"
-                    ></div>
-                  </div>
-
-                  <div class="score-percent">
-                    ${formatPercent(
-                      probability
-                    )}
-                  </div>
-
-                </div>
-              `;
-            }
-          )
-          .join("");
-    }
-
-    /*
-     * ============================================
-     * LINEUPS
-     * ============================================
-     */
-
-    function renderLineups(
-      match
-    ) {
-      const container =
-        el("lineups");
-
-      const lineups =
-        match?.lineups;
-
-      if (
-        !Array.isArray(
-          lineups
-        ) ||
-        !lineups.length
-      ) {
-        container.className =
-          "empty";
-
-        container.textContent =
-          "Nessuna formazione disponibile da BBD per questa partita.";
-
-        return;
-      }
-
-      container.className =
-        "";
-
-      container.innerHTML = `
-        <div class="small">
-          Formazioni ricevute da BBD:
-          ${lineups.length}
+  el("markets").innerHTML =
+    items.map(item => `
+      <div class="market">
+        <div class="market-name">
+          ${escapeHtml(item[0])}
         </div>
 
-        <pre class="json-box">${escapeHtml(
-          JSON.stringify(
-            lineups,
-            null,
-            2
-          )
-        )}</pre>
+        <div class="market-prob">
+          ${formatPercent(item[1])}
+        </div>
+
+        <div class="market-odd">
+          Fair odds: ${formatOdd(item[2])}
+        </div>
+      </div>
+    `).join("");
+}
+
+/* =========================================================
+   SCORES
+========================================================= */
+
+function renderScores(data) {
+  const scores = Array.isArray(data.exactScores)
+    ? data.exactScores
+    : [];
+
+  if (!scores.length) {
+    el("scores").innerHTML =
+      `<div class="empty">
+        Nessun risultato esatto disponibile.
+      </div>`;
+    return;
+  }
+
+  const max = Math.max(
+    ...scores.map(x => number(x.probability) || 0)
+  );
+
+  el("scores").innerHTML =
+    scores.map(item => {
+      const probability =
+        number(item.probability) || 0;
+
+      const width =
+        max > 0
+          ? probability / max * 100
+          : 0;
+
+      return `
+        <div class="score-row">
+          <div class="score">
+            ${escapeHtml(item.score)}
+          </div>
+
+          <div class="score-bar">
+            <div
+              class="score-fill"
+              style="width:${width}%"
+            ></div>
+          </div>
+
+          <div class="score-percent">
+            ${formatPercent(probability)}
+          </div>
+        </div>
       `;
-    }
+    }).join("");
+}
 
-    /*
-     * ============================================
-     * STANDINGS
-     * ============================================
-     */
+/* =========================================================
+   LINEUPS
+========================================================= */
 
-    function renderStandings() {
-      const container =
-        el("standings");
+function renderLineups(match) {
+  const container = el("lineups");
 
-      const standings =
-        state.standings;
+  const matchId = match?.id;
 
-      if (
-        !Array.isArray(
-          standings
-        ) ||
-        !standings.length
-      ) {
-        container.className =
-          "empty";
+  let data = null;
 
-        container.textContent =
-          "Classifica non disponibile da BBD.";
+  if (matchId) {
+    const item =
+      state.lineups.find(
+        x => x.matchId === matchId
+      );
 
-        return;
-      }
+    data = item?.data || null;
+  }
 
-      container.className =
-        "";
+  if (!data) {
+    container.className = "empty";
+    container.textContent =
+      "Nessuna formazione disponibile per questa partita.";
+    return;
+  }
 
-      container.innerHTML = `
-        <div style="overflow:auto;">
-          <table>
-            <thead>
+  container.className = "";
+
+  container.innerHTML = `
+    <div class="small">
+      Formazione ricevuta da BBD.
+    </div>
+
+    <pre class="json-box">${escapeHtml(
+      JSON.stringify(data, null, 2)
+    )}</pre>
+  `;
+}
+
+/* =========================================================
+   STANDINGS
+========================================================= */
+
+function renderStandings() {
+  const container = el("standings");
+
+  if (!state.standings.length) {
+    container.className = "empty";
+    container.textContent =
+      "Classifica non disponibile da BBD.";
+    return;
+  }
+
+  container.className = "";
+
+  container.innerHTML = `
+    <div style="overflow:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Squadra</th>
+            <th>Pt</th>
+            <th>PG</th>
+            <th>GF</th>
+            <th>GA</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${state.standings.map((row, index) => {
+            const team =
+              getTeamName(row.team) ||
+              row.teamName ||
+              row.name ||
+              "—";
+
+            const position =
+              row.position ??
+              row.rank ??
+              index + 1;
+
+            const points =
+              row.points ??
+              row.pts ??
+              "—";
+
+            const played =
+              row.played ??
+              row.matches ??
+              row.games ??
+              "—";
+
+            const gf =
+              row.goalsFor ??
+              row.gf ??
+              "—";
+
+            const ga =
+              row.goalsAgainst ??
+              row.ga ??
+              "—";
+
+            return `
               <tr>
-                <th>#</th>
-                <th>Squadra</th>
-                <th>Pt</th>
-                <th>PG</th>
-                <th>GF</th>
-                <th>GA</th>
+                <td>${escapeHtml(position)}</td>
+                <td>${escapeHtml(team)}</td>
+                <td>${escapeHtml(points)}</td>
+                <td>${escapeHtml(played)}</td>
+                <td>${escapeHtml(gf)}</td>
+                <td>${escapeHtml(ga)}</td>
               </tr>
-            </thead>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
 
-            <tbody>
-              ${standings
-                .map(
-                  (
-                    row,
-                    index
-                  ) => {
-                    const team =
-                      row.team?.name ||
-                      row.teamName ||
-                      row.name ||
-                      "—";
+/* =========================================================
+   TABS
+========================================================= */
 
-                    const position =
-                      row.position ??
-                      row.rank ??
-                      index + 1;
+function setupTabs() {
+  document.querySelectorAll(".tab")
+    .forEach(button => {
+      button.addEventListener("click", () => {
 
-                    const points =
-                      row.points ??
-                      row.pts ??
-                      "—";
+        document.querySelectorAll(".tab")
+          .forEach(x => x.classList.remove("active"));
 
-                    const played =
-                      row.played ??
-                      row.matches ??
-                      row.games ??
-                      "—";
+        document.querySelectorAll(".tab-content")
+          .forEach(x => x.classList.remove("active"));
 
-                    const gf =
-                      row.goalsFor ??
-                      row.gf ??
-                      "—";
+        button.classList.add("active");
 
-                    const ga =
-                      row.goalsAgainst ??
-                      row.ga ??
-                      "—";
+        const target =
+          el(`tab-${button.dataset.tab}`);
 
-                    return `
-                      <tr>
-                        <td>
-                          ${escapeHtml(
-                            position
-                          )}
-                        </td>
+        if (target) {
+          target.classList.add("active");
+        }
+      });
+    });
+}
 
-                        <td>
-                          ${escapeHtml(
-                            team
-                          )}
-                        </td>
+/* =========================================================
+   EVENTS
+========================================================= */
 
-                        <td>
-                          ${escapeHtml(
-                            points
-                          )}
-                        </td>
+function setupEvents() {
 
-                        <td>
-                          ${escapeHtml(
-                            played
-                          )}
-                        </td>
+  el("syncBtn")
+    .addEventListener("click", syncData);
 
-                        <td>
-                          ${escapeHtml(
-                            gf
-                          )}
-                        </td>
+  el("predictBtn")
+    .addEventListener("click", predict);
 
-                        <td>
-                          ${escapeHtml(
-                            ga
-                          )}
-                        </td>
-                      </tr>
-                    `;
-                  }
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      `;
-    }
+  el("homeTeam")
+    .addEventListener("change", predict);
 
-    /*
-     * ============================================
-     * TABS
-     * ============================================
-     */
+  el("awayTeam")
+    .addEventListener("change", predict);
 
-    function setupTabs() {
-      document
-        .querySelectorAll(
-          ".tab"
-        )
-        .forEach(
-          (button) => {
-            button.addEventListener(
-              "click",
-              () => {
-                document
-                  .querySelectorAll(
-                    ".tab"
-                  )
-                  .forEach(
-                    (item) =>
-                      item.classList.remove(
-                        "active"
-                      )
-                  );
+  el("competition")
+    .addEventListener("change", predict);
+}
 
-                document
-                  .querySelectorAll(
-                    ".tab-content"
-                  )
-                  .forEach(
-                    (item) =>
-                      item.classList.remove(
-                        "active"
-                      )
-                  );
+/* =========================================================
+   GLOBAL ERROR HANDLING
+========================================================= */
 
-                button.classList.add(
-                  "active"
-                );
+window.addEventListener("error", event => {
+  console.error(event.error || event.message);
 
-                const target =
-                  el(
-                    `tab-${button.dataset.tab}`
-                  );
+  setStatus(
+    `Errore JavaScript: ${event.message}`,
+    "error"
+  );
+});
 
-                if (target) {
-                  target.classList.add(
-                    "active"
-                  );
-                }
-              }
-            );
-          }
-        );
-    }
+window.addEventListener("unhandledrejection", event => {
+  console.error(event.reason);
 
-    /*
-     * ============================================
-     * EVENTS
-     * ============================================
-     */
+  setStatus(
+    `Errore applicazione: ${
+      event.reason?.message ||
+      String(event.reason)
+    }`,
+    "error"
+  );
+});
 
-    function setupEvents() {
-      el("syncBtn")
-        .addEventListener(
-          "click",
-          syncData
-        );
+/* =========================================================
+   INIT
+========================================================= */
 
-      el("predictBtn")
-        .addEventListener(
-          "click",
-          predict
-        );
+function init() {
+  try {
+    populateTeams();
+    setupTabs();
+    setupEvents();
 
-      el("homeTeam")
-        .addEventListener(
-          "change",
-          predict
-        );
+    setStatus(
+      "Pronto. Premi «Sincronizza BBD» per caricare i dati.",
+      ""
+    );
 
-      el("awayTeam")
-        .addEventListener(
-          "change",
-          predict
-        );
+  } catch (error) {
+    console.error(error);
 
-      el("competition")
-        .addEventListener(
-          "change",
-          predict
-        );
-    }
+    setStatus(
+      `Errore inizializzazione: ${error.message}`,
+      "error"
+    );
+  }
+}
 
-    /*
-     * ============================================
-     * INIT
-     * ============================================
-     */
+init();
+</script>
 
-    function init() {
-      populateTeams();
-
-      setupTabs();
-
-      setupEvents();
-
-      setStatus(
-        "Pronto. Premi «Sincronizza BBD» per caricare i dati.",
-        ""
-      );
-
-      // Prima previsione usando fallback
-      predict();
-    }
-
-    init();
-  </script>
 </body>
 </html>
