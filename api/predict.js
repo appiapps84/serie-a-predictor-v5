@@ -1,6 +1,10 @@
 const MAX_GOALS = 10;
 const DIXON_COLES_RHO = -0.08;
 
+/* =========================================================
+   POISSON
+========================================================= */
+
 function poisson(k, lambda) {
   if (!Number.isFinite(lambda) || lambda <= 0) {
     return k === 0 ? 1 : 0;
@@ -19,65 +23,62 @@ function poisson(k, lambda) {
   );
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+
+/* =========================================================
+   NORMALIZZAZIONE
+========================================================= */
+
+function normalizeNumber(value) {
+  const n = Number(value);
+
+  return Number.isFinite(n) ? n : null;
 }
 
-function number(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
 
 function normalizeXG(value) {
   const n = Number(value);
 
-  if (!Number.isFinite(n)) return null;
-  if (n < 0 || n > 8) return null;
+  if (!Number.isFinite(n)) {
+    return null;
+  }
+
+  if (n < 0 || n > 10) {
+    return null;
+  }
 
   return n;
 }
 
-function normalizeName(name) {
-  return String(name || "")
-    .trim()
-    .toLowerCase();
-}
 
-function getAliases() {
-  return {
-    "inter milan": "inter",
-    "internazionale": "inter",
-    "como 1907": "como",
-    "as roma": "roma",
-    "ac milan": "milan",
-    "venezia fc": "venezia"
-  };
-}
-
-function canonicalTeamName(name) {
-  const normalized = normalizeName(name);
-  const aliases = getAliases();
-
-  return aliases[normalized] || normalized;
-}
+/* =========================================================
+   INPUT xG DIRETTO
+========================================================= */
 
 function getMatchXG(body) {
-  const matchXG = body?.match?.xG;
+
+  const matchXG =
+    body?.match?.xG;
 
   if (matchXG) {
-    const home = normalizeXG(
-      matchXG.homeXG ??
-      matchXG.home ??
-      matchXG.home_xg
-    );
 
-    const away = normalizeXG(
-      matchXG.awayXG ??
-      matchXG.away ??
-      matchXG.away_xg
-    );
+    const home =
+      normalizeXG(
+        matchXG.homeXG ??
+        matchXG.home ??
+        matchXG.home_xg
+      );
 
-    if (home !== null && away !== null) {
+    const away =
+      normalizeXG(
+        matchXG.awayXG ??
+        matchXG.away ??
+        matchXG.away_xg
+      );
+
+    if (
+      home !== null &&
+      away !== null
+    ) {
       return {
         homeXG: home,
         awayXG: away
@@ -85,736 +86,1063 @@ function getMatchXG(body) {
     }
   }
 
-  const home = normalizeXG(
-    body?.homeXG ??
-    body?.home_xg
-  );
 
-  const away = normalizeXG(
-    body?.awayXG ??
-    body?.away_xg
-  );
+  const home =
+    normalizeXG(
+      body?.homeXG ??
+      body?.home_xg
+    );
 
-  if (home !== null && away !== null) {
+  const away =
+    normalizeXG(
+      body?.awayXG ??
+      body?.away_xg
+    );
+
+
+  if (
+    home !== null &&
+    away !== null
+  ) {
     return {
       homeXG: home,
       awayXG: away
     };
   }
 
+
   return null;
 }
 
-function getStandingForTeam(standings, teamName) {
-  if (!Array.isArray(standings)) {
+
+/* =========================================================
+   FALLBACK BASE
+========================================================= */
+
+function getFallbackXG(body) {
+
+  const homeAttack =
+    Number(body?.homeAttack);
+
+  const awayAttack =
+    Number(body?.awayAttack);
+
+
+  return {
+
+    homeXG:
+      Number.isFinite(homeAttack) &&
+      homeAttack > 0
+        ? Math.min(homeAttack, 6)
+        : 1.35,
+
+    awayXG:
+      Number.isFinite(awayAttack) &&
+      awayAttack > 0
+        ? Math.min(awayAttack, 6)
+        : 1.05
+  };
+}
+
+
+/* =========================================================
+   xG DA CLASSIFICA
+========================================================= */
+
+function getStandingsXG(body) {
+
+  const standings =
+    Array.isArray(body?.standings)
+      ? body.standings
+      : [];
+
+
+  if (standings.length < 2) {
     return null;
   }
 
-  const target = canonicalTeamName(teamName);
 
-  return (
-    standings.find((row) => {
-      const name =
-        row?.team_name ??
-        row?.teamName ??
-        row?.name ??
-        row?.team?.name;
-
-      return canonicalTeamName(name) === target;
-    }) || null
-  );
-}
-
-function buildTeamStrength(standing, isHome) {
-  /*
-    BBD standings:
-    wins, losses, ties, games_played,
-    points_for, points_against, rank.
-
-    "points_for/against" nella risposta BBD
-    sono i gol fatti/subiti per il calcio.
-  */
-
-  if (!standing) {
-    return {
-      attack: 1,
-      defense: 1,
-      rankFactor: 1
-    };
-  }
-
-  const played = Math.max(
-    1,
-    number(
-      standing.games_played ??
-      standing.played ??
-      standing.matches_played,
-      1
-    )
-  );
-
-  const goalsFor = number(
-    standing.points_for ??
-    standing.goals_for ??
-    standing.gf
-  );
-
-  const goalsAgainst = number(
-    standing.points_against ??
-    standing.goals_against ??
-    standing.ga
-  );
-
-  const rank = number(standing.rank, 10);
-
-  /*
-    Media Serie A neutrale approssimativa.
-    Serve solo come punto di riferimento per
-    normalizzare i dati della classifica.
-  */
-  const leagueGoalsPerTeam = 1.35;
-
-  const goalsForPerGame =
-    goalsFor > 0
-      ? goalsFor / played
-      : leagueGoalsPerTeam;
-
-  const goalsAgainstPerGame =
-    goalsAgainst >= 0
-      ? goalsAgainst / played
-      : leagueGoalsPerTeam;
-
-  let attack =
-    goalsForPerGame /
-    leagueGoalsPerTeam;
-
-  let defense =
-    goalsAgainstPerGame /
-    leagueGoalsPerTeam;
-
-  /*
-    Limitiamo l'effetto della classifica.
-    Una squadra con 4 partite non deve diventare
-    automaticamente una superpotenza.
-  */
-  attack = clamp(attack, 0.65, 1.55);
-  defense = clamp(defense, 0.65, 1.55);
-
-  /*
-    Piccolo aggiustamento dal ranking.
-    Rank 1 ≈ +5%, rank 20 ≈ -5%.
-  */
-  const rankFactor = clamp(
-    1.05 - ((rank - 1) / 19) * 0.10,
-    0.95,
-    1.05
-  );
-
-  if (isHome) {
-    attack *= rankFactor;
-  } else {
-    attack *= rankFactor;
-  }
-
-  return {
-    attack,
-    defense,
-    rankFactor
-  };
-}
-
-function getFallbackXG(body) {
   const homeTeam =
-    body?.match?.home?.name ??
-    body?.homeTeam ??
-    body?.home ??
-    "";
+    String(
+      body?.homeTeam || ""
+    ).trim().toLowerCase();
+
 
   const awayTeam =
-    body?.match?.away?.name ??
-    body?.awayTeam ??
-    body?.away ??
-    "";
+    String(
+      body?.awayTeam || ""
+    ).trim().toLowerCase();
 
-  const standings = Array.isArray(body?.standings)
-    ? body.standings
-    : [];
 
-  const homeStanding =
-    getStandingForTeam(
-      standings,
-      homeTeam
-    );
+  function findTeam(name) {
 
-  const awayStanding =
-    getStandingForTeam(
-      standings,
-      awayTeam
-    );
+    const target =
+      name.toLowerCase();
 
-  const homeStrength =
-    buildTeamStrength(
-      homeStanding,
-      true
-    );
 
-  const awayStrength =
-    buildTeamStrength(
-      awayStanding,
-      false
-    );
+    return standings.find(row => {
+
+      const rowName =
+        String(
+          row?.team_name ??
+          row?.name ??
+          row?.team?.name ??
+          ""
+        )
+        .trim()
+        .toLowerCase();
+
+
+      return (
+        rowName === target ||
+        rowName.includes(target) ||
+        target.includes(rowName)
+      );
+    });
+  }
+
+
+  const home =
+    findTeam(homeTeam);
+
+  const away =
+    findTeam(awayTeam);
+
+
+  if (!home || !away) {
+    return null;
+  }
+
 
   /*
-    Forza offensiva della squadra
-    × debolezza difensiva avversaria.
-  */
+   * Usiamo:
+   *
+   * punti per partita
+   * +
+   * differenziale reti per partita
+   *
+   * per ottenere un indice offensivo/forza.
+   */
+
+
+  const homeGames =
+    Number(
+      home.games_played ??
+      home.played ??
+      home.games ??
+      0
+    );
+
+
+  const awayGames =
+    Number(
+      away.games_played ??
+      away.played ??
+      away.games ??
+      0
+    );
+
+
+  const homePF =
+    Number(
+      home.points_for ??
+      home.goals_for ??
+      home.gf ??
+      0
+    );
+
+
+  const homePA =
+    Number(
+      home.points_against ??
+      home.goals_against ??
+      home.ga ??
+      0
+    );
+
+
+  const awayPF =
+    Number(
+      away.points_for ??
+      away.goals_for ??
+      away.gf ??
+      0
+    );
+
+
+  const awayPA =
+    Number(
+      away.points_against ??
+      away.goals_against ??
+      away.ga ??
+      0
+    );
+
+
+  if (
+    homeGames <= 0 ||
+    awayGames <= 0
+  ) {
+    return null;
+  }
+
+
+  const homeGF =
+    homePF / homeGames;
+
+  const homeGA =
+    homePA / homeGames;
+
+  const awayGF =
+    awayPF / awayGames;
+
+  const awayGA =
+    awayPA / awayGames;
+
+
+  /*
+   * Base campionato.
+   */
+
+  const leagueHome =
+    1.55;
+
+  const leagueAway =
+    1.20;
+
+
+  /*
+   * Forza offensiva + vulnerabilità difensiva.
+   */
 
   let homeXG =
-    1.35 *
-    homeStrength.attack *
-    awayStrength.defense;
+    leagueHome *
+    (
+      0.65 * (homeGF / 1.45) +
+      0.35 * (awayGA / 1.20)
+    );
+
 
   let awayXG =
-    1.05 *
-    awayStrength.attack *
-    homeStrength.defense;
+    leagueAway *
+    (
+      0.65 * (awayGF / 1.45) +
+      0.35 * (homeGA / 1.55)
+    );
+
 
   /*
-    Vantaggio campo.
-  */
-  homeXG *= 1.10;
+   * Limiti realistici.
+   */
+
+  homeXG =
+    Math.max(
+      0.35,
+      Math.min(3.8, homeXG)
+    );
+
+
+  awayXG =
+    Math.max(
+      0.25,
+      Math.min(3.5, awayXG)
+    );
+
 
   /*
-    Evitiamo valori estremi.
-  */
-  homeXG = clamp(homeXG, 0.35, 3.40);
-  awayXG = clamp(awayXG, 0.25, 3.00);
+   * Vantaggio campo.
+   */
 
-  /*
-    Se il frontend passa valori manuali di attack,
-    li usiamo come ulteriore informazione.
-  */
-  const manualHomeAttack =
-    number(body?.homeAttack, 0);
+  homeXG *= 1.06;
 
-  const manualAwayAttack =
-    number(body?.awayAttack, 0);
-
-  if (manualHomeAttack > 0) {
-    homeXG =
-      homeXG * 0.75 +
-      clamp(manualHomeAttack, 0.35, 3.5) * 0.25;
-  }
-
-  if (manualAwayAttack > 0) {
-    awayXG =
-      awayXG * 0.75 +
-      clamp(manualAwayAttack, 0.25, 3.0) * 0.25;
-  }
 
   return {
-    homeXG: clamp(homeXG, 0.35, 3.40),
-    awayXG: clamp(awayXG, 0.25, 3.00),
-    homeStanding,
-    awayStanding
+    homeXG,
+    awayXG
   };
 }
 
-function applyDixonColes(matrix, homeXG, awayXG) {
-  /*
-    Correzione Dixon-Coles per gli score bassi.
-  */
 
-  const corrected = matrix.map(
-    (row) => [...row]
-  );
+/* =========================================================
+   DIXON-COLES
+========================================================= */
 
-  const rho = DIXON_COLES_RHO;
+function dixonColesAdjustment(
+  homeGoals,
+  awayGoals,
+  homeXG,
+  awayXG
+) {
 
-  const p00 =
-    corrected[0]?.[0] ?? 0;
+  const rho =
+    DIXON_COLES_RHO;
 
-  const p01 =
-    corrected[0]?.[1] ?? 0;
 
-  const p10 =
-    corrected[1]?.[0] ?? 0;
-
-  const p11 =
-    corrected[1]?.[1] ?? 0;
-
-  if (corrected[0]?.[0] !== undefined) {
-    corrected[0][0] =
-      p00 *
-      (1 - homeXG * awayXG * rho);
+  if (
+    homeGoals === 0 &&
+    awayGoals === 0
+  ) {
+    return (
+      1 -
+      homeXG *
+      awayXG *
+      rho
+    );
   }
 
-  if (corrected[0]?.[1] !== undefined) {
-    corrected[0][1] =
-      p01 *
-      (1 + homeXG * rho);
+
+  if (
+    homeGoals === 0 &&
+    awayGoals === 1
+  ) {
+    return (
+      1 +
+      homeXG *
+      rho
+    );
   }
 
-  if (corrected[1]?.[0] !== undefined) {
-    corrected[1][0] =
-      p10 *
-      (1 + awayXG * rho);
+
+  if (
+    homeGoals === 1 &&
+    awayGoals === 0
+  ) {
+    return (
+      1 +
+      awayXG *
+      rho
+    );
   }
 
-  if (corrected[1]?.[1] !== undefined) {
-    corrected[1][1] =
-      p11 *
-      (1 - rho);
+
+  if (
+    homeGoals === 1 &&
+    awayGoals === 1
+  ) {
+    return 1 - rho;
   }
 
-  return corrected;
+
+  return 1;
 }
 
-function calculateMatrix(homeXG, awayXG) {
+
+/* =========================================================
+   MATRICE PROBABILITÀ
+========================================================= */
+
+function buildScoreMatrix(
+  homeXG,
+  awayXG
+) {
+
   const matrix = [];
 
-  for (let home = 0; home <= MAX_GOALS; home++) {
-    const row = [];
+  let total = 0;
+
+
+  for (
+    let home = 0;
+    home <= MAX_GOALS;
+    home++
+  ) {
+
+    matrix[home] = [];
 
     for (
       let away = 0;
       away <= MAX_GOALS;
       away++
     ) {
-      row.push(
+
+      const base =
         poisson(home, homeXG) *
-        poisson(away, awayXG)
-      );
-    }
+        poisson(away, awayXG);
 
-    matrix.push(row);
+
+      const adjustment =
+        dixonColesAdjustment(
+          home,
+          away,
+          homeXG,
+          awayXG
+        );
+
+
+      const probability =
+        base * adjustment;
+
+
+      matrix[home][away] =
+        probability;
+
+
+      total += probability;
+    }
   }
 
-  return applyDixonColes(
-    matrix,
-    homeXG,
-    awayXG
-  );
+
+  /*
+   * Normalizzazione.
+   */
+
+  for (
+    let home = 0;
+    home <= MAX_GOALS;
+    home++
+  ) {
+
+    for (
+      let away = 0;
+      away <= MAX_GOALS;
+      away++
+    ) {
+
+      matrix[home][away] =
+        matrix[home][away] /
+        total;
+    }
+  }
+
+
+  return matrix;
 }
 
-function normalizeMatrix(matrix) {
-  let total = 0;
 
-  for (const row of matrix) {
-    for (const value of row) {
-      total += value;
-    }
-  }
+/* =========================================================
+   PROBABILITÀ MERCATI
+========================================================= */
 
-  if (total <= 0) {
-    return matrix;
-  }
+function calculateProbabilities(
+  matrix
+) {
 
-  return matrix.map(
-    (row) =>
-      row.map(
-        (value) => value / total
-      )
-  );
-}
-
-function calculateMarkets(matrix) {
-  let home = 0;
+  let homeWin = 0;
   let draw = 0;
-  let away = 0;
+  let awayWin = 0;
 
   let over15 = 0;
   let over25 = 0;
   let over35 = 0;
 
-  let btts = 0;
+  let bttsYes = 0;
 
-  const exactScores = [];
 
-  for (let h = 0; h < matrix.length; h++) {
+  for (
+    let home = 0;
+    home <= MAX_GOALS;
+    home++
+  ) {
+
     for (
-      let a = 0;
-      a < matrix[h].length;
-      a++
+      let away = 0;
+      away <= MAX_GOALS;
+      away++
     ) {
-      const probability = matrix[h][a];
 
-      if (h > a) home += probability;
-      else if (h === a) draw += probability;
-      else away += probability;
+      const p =
+        matrix[home][away];
 
-      if (h + a > 1.5) {
-        over15 += probability;
+
+      if (home > away) {
+        homeWin += p;
       }
 
-      if (h + a > 2.5) {
-        over25 += probability;
+      else if (home === away) {
+        draw += p;
       }
 
-      if (h + a > 3.5) {
-        over35 += probability;
+      else {
+        awayWin += p;
       }
 
-      if (h > 0 && a > 0) {
-        btts += probability;
+
+      const goals =
+        home + away;
+
+
+      if (goals >= 2) {
+        over15 += p;
       }
 
-      exactScores.push({
-        score: `${h}-${a}`,
-        probability
+      if (goals >= 3) {
+        over25 += p;
+      }
+
+      if (goals >= 4) {
+        over35 += p;
+      }
+
+
+      if (
+        home > 0 &&
+        away > 0
+      ) {
+        bttsYes += p;
+      }
+    }
+  }
+
+
+  return {
+
+    homeWin,
+
+    draw,
+
+    awayWin,
+
+    homeOrDraw:
+      homeWin + draw,
+
+    drawOrAway:
+      draw + awayWin,
+
+    homeOrAway:
+      homeWin + awayWin,
+
+    over15,
+
+    under15:
+      1 - over15,
+
+    over25,
+
+    under25:
+      1 - over25,
+
+    over35,
+
+    under35:
+      1 - over35,
+
+    bttsYes,
+
+    bttsNo:
+      1 - bttsYes
+  };
+}
+
+
+/* =========================================================
+   RISULTATI ESATTI
+========================================================= */
+
+function getExactScores(matrix) {
+
+  const scores = [];
+
+
+  for (
+    let home = 0;
+    home <= MAX_GOALS;
+    home++
+  ) {
+
+    for (
+      let away = 0;
+      away <= MAX_GOALS;
+      away++
+    ) {
+
+      scores.push({
+
+        home,
+
+        away,
+
+        probability:
+          matrix[home][away]
       });
     }
   }
 
-  exactScores.sort(
-    (a, b) =>
-      b.probability -
-      a.probability
-  );
+
+  return scores
+    .sort(
+      (a, b) =>
+        b.probability -
+        a.probability
+    )
+    .slice(0, 10);
+}
+
+
+/* =========================================================
+   FAIR ODDS
+========================================================= */
+
+function fairOdds(probabilities) {
+
+  function odds(p) {
+
+    if (
+      !Number.isFinite(p) ||
+      p <= 0
+    ) {
+      return null;
+    }
+
+    return Number(
+      (1 / p).toFixed(2)
+    );
+  }
+
 
   return {
-    oneXTwo: {
-      home,
-      draw,
-      away
-    },
 
-    doubleChance: {
-      "1X": home + draw,
-      "X2": draw + away,
-      "12": home + away
-    },
+    homeWin:
+      odds(probabilities.homeWin),
 
-    overUnder: {
-      over15,
-      under15: 1 - over15,
+    draw:
+      odds(probabilities.draw),
 
-      over25,
-      under25: 1 - over25,
+    awayWin:
+      odds(probabilities.awayWin),
 
-      over35,
-      under35: 1 - over35
-    },
+    homeOrDraw:
+      odds(probabilities.homeOrDraw),
 
-    btts: {
-      yes: btts,
-      no: 1 - btts
-    },
+    drawOrAway:
+      odds(probabilities.drawOrAway),
 
-    exactScores:
-      exactScores.slice(0, 10)
+    homeOrAway:
+      odds(probabilities.homeOrAway),
+
+    over15:
+      odds(probabilities.over15),
+
+    under15:
+      odds(probabilities.under15),
+
+    over25:
+      odds(probabilities.over25),
+
+    under25:
+      odds(probabilities.under25),
+
+    over35:
+      odds(probabilities.over35),
+
+    under35:
+      odds(probabilities.under35),
+
+    bttsYes:
+      odds(probabilities.bttsYes),
+
+    bttsNo:
+      odds(probabilities.bttsNo)
   };
 }
 
-function fairOdds(probability) {
-  if (
-    !Number.isFinite(probability) ||
-    probability <= 0
-  ) {
-    return null;
-  }
 
-  return Number(
-    (1 / probability).toFixed(2)
-  );
-}
+/* =========================================================
+   CONFIDENCE
+========================================================= */
 
 function calculateConfidence({
   xgSource,
-  homeStanding,
-  awayStanding,
-  match
+  match,
+  lineups
 }) {
-  let confidence = 48;
 
-  if (xgSource === "BBD match xG") {
-    confidence += 22;
+  let confidence = 45;
+
+
+  if (
+    xgSource ===
+    "BBD match xG"
+  ) {
+    confidence += 25;
   }
 
-  if (xgSource === "BBD/API xG") {
-    confidence += 18;
+
+  else if (
+    xgSource ===
+    "BBD/API xG"
+  ) {
+    confidence += 20;
   }
 
-  if (homeStanding && awayStanding) {
+
+  else if (
+    xgSource ===
+    "BBD standings estimate"
+  ) {
     confidence += 10;
   }
 
+
+  if (
+    Array.isArray(lineups) &&
+    lineups.length > 0
+  ) {
+    confidence += 10;
+  }
+
+
   if (match?.status) {
-    confidence += 3;
+    confidence += 5;
   }
 
-  /*
-    Se le due squadre hanno pochissime partite,
-    riduciamo leggermente la fiducia.
-  */
-  const homeGames = number(
-    homeStanding?.games_played,
-    0
-  );
 
-  const awayGames = number(
-    awayStanding?.games_played,
-    0
-  );
-
-  if (
-    homeGames > 0 &&
-    homeGames < 5
-  ) {
-    confidence -= 4;
-  }
-
-  if (
-    awayGames > 0 &&
-    awayGames < 5
-  ) {
-    confidence -= 4;
-  }
-
-  return clamp(
-    Math.round(confidence),
+  return Math.max(
     30,
-    90
+    Math.min(90, confidence)
   );
 }
 
-function parseBody(req) {
-  if (!req.body) {
-    return {};
-  }
 
-  if (typeof req.body === "object") {
+/* =========================================================
+   BODY PARSER
+========================================================= */
+
+async function parseBody(req) {
+
+  if (
+    req.body &&
+    typeof req.body === "object"
+  ) {
     return req.body;
   }
 
-  if (typeof req.body === "string") {
+
+  if (
+    typeof req.body === "string"
+  ) {
+
     try {
       return JSON.parse(req.body);
     } catch {
-      return {};
+      throw new Error(
+        "Body JSON non valido."
+      );
     }
   }
+
 
   return {};
 }
 
-export default async function handler(req, res) {
+
+/* =========================================================
+   HANDLER
+========================================================= */
+
+export default async function handler(
+  req,
+  res
+) {
+
   res.setHeader(
     "Cache-Control",
     "no-store"
   );
 
+
   if (req.method !== "POST") {
+
     return res.status(405).json({
+
       ok: false,
-      error: "METHOD_NOT_ALLOWED",
-      message: "Usa POST per /api/predict."
+
+      error:
+        "METHOD_NOT_ALLOWED",
+
+      message:
+        "Usa POST per /api/predict."
     });
   }
 
-  try {
-    const body = parseBody(req);
 
-    const match = body.match || {};
+  try {
+
+    const body =
+      await parseBody(req);
+
 
     const homeTeam =
-      match?.home?.name ??
-      body.homeTeam ??
-      body.home ??
+      body.homeTeam ||
+      body.home ||
+      body.match?.homeTeam ||
+      body.match?.home?.name ||
       "Casa";
 
+
     const awayTeam =
-      match?.away?.name ??
-      body.awayTeam ??
-      body.away ??
+      body.awayTeam ||
+      body.away ||
+      body.match?.awayTeam ||
+      body.match?.away?.name ||
       "Trasferta";
 
-    // --------------------------------------------------
-    // XG REALE, SE PRESENTE
-    // --------------------------------------------------
 
-    const realXG = getMatchXG(body);
+    const competition =
+      body.competition ||
+      "seriea";
 
-    let homeXG;
-    let awayXG;
-    let xgSource;
 
-    let homeStanding = null;
-    let awayStanding = null;
+    /*
+     * -----------------------------------------------------
+     * 1. PRIORITÀ: xG REALI DEL MATCH
+     * -----------------------------------------------------
+     */
 
-    if (realXG) {
-      homeXG = realXG.homeXG;
-      awayXG = realXG.awayXG;
+    let xg =
+      getMatchXG(body);
 
-      xgSource = "BBD match xG";
-    } else {
-      const fallback =
-        getFallbackXG(body);
 
-      homeXG = fallback.homeXG;
-      awayXG = fallback.awayXG;
+    let xgSource =
+      "Fallback model";
 
-      homeStanding =
-        fallback.homeStanding;
 
-      awayStanding =
-        fallback.awayStanding;
+    /*
+     * -----------------------------------------------------
+     * 2. xG API DIRETTI
+     * -----------------------------------------------------
+     */
 
-      xgSource =
-        homeStanding &&
-        awayStanding
-          ? "BBD/API xG"
-          : "Classifica + fallback";
+    if (!xg) {
+
+      const apiHome =
+        normalizeXG(
+          body.homeXG
+        );
+
+      const apiAway =
+        normalizeXG(
+          body.awayXG
+        );
+
+
+      if (
+        apiHome !== null &&
+        apiAway !== null
+      ) {
+
+        xg = {
+
+          homeXG:
+            apiHome,
+
+          awayXG:
+            apiAway
+        };
+
+
+        xgSource =
+          "BBD/API xG";
+      }
     }
 
-    // --------------------------------------------------
-    // MODELLO
-    // --------------------------------------------------
 
-    let matrix =
-      calculateMatrix(
+    /*
+     * -----------------------------------------------------
+     * 3. STIMA DALLA CLASSIFICA
+     * -----------------------------------------------------
+     */
+
+    if (!xg) {
+
+      const standingsXG =
+        getStandingsXG(body);
+
+
+      if (standingsXG) {
+
+        xg =
+          standingsXG;
+
+        xgSource =
+          "BBD standings estimate";
+      }
+    }
+
+
+    /*
+     * -----------------------------------------------------
+     * 4. FALLBACK
+     * -----------------------------------------------------
+     */
+
+    if (!xg) {
+
+      xg =
+        getFallbackXG(body);
+
+      xgSource =
+        "Fallback model";
+    }
+
+
+    /*
+     * Piccola protezione finale.
+     */
+
+    let homeXG =
+      Math.max(
+        0.15,
+        Math.min(
+          5,
+          Number(xg.homeXG)
+        )
+      );
+
+
+    let awayXG =
+      Math.max(
+        0.15,
+        Math.min(
+          5,
+          Number(xg.awayXG)
+        )
+      );
+
+
+    /*
+     * -----------------------------------------------------
+     * MATRICE
+     * -----------------------------------------------------
+     */
+
+    const matrix =
+      buildScoreMatrix(
         homeXG,
         awayXG
       );
 
-    matrix =
-      normalizeMatrix(matrix);
 
-    const markets =
-      calculateMarkets(matrix);
+    const probabilities =
+      calculateProbabilities(
+        matrix
+      );
+
+
+    const exactScores =
+      getExactScores(
+        matrix
+      );
+
+
+    const odds =
+      fairOdds(
+        probabilities
+      );
+
 
     const confidence =
       calculateConfidence({
         xgSource,
-        homeStanding,
-        awayStanding,
-        match
+        match: body.match,
+        lineups: body.lineups
       });
 
-    // --------------------------------------------------
-    // QUOTE FAIR
-    // --------------------------------------------------
 
-    const fair = {
-      home: fairOdds(
-        markets.oneXTwo.home
-      ),
-
-      draw: fairOdds(
-        markets.oneXTwo.draw
-      ),
-
-      away: fairOdds(
-        markets.oneXTwo.away
-      ),
-
-      over25: fairOdds(
-        markets.overUnder.over25
-      ),
-
-      under25: fairOdds(
-        markets.overUnder.under25
-      ),
-
-      bttsYes: fairOdds(
-        markets.btts.yes
-      ),
-
-      bttsNo: fairOdds(
-        markets.btts.no
-      )
-    };
-
-    // --------------------------------------------------
-    // RISULTATO PIÙ PROBABILE
-    // --------------------------------------------------
-
-    const topScore =
-      markets.exactScores[0] || null;
-
-    const outcomes = [
-      {
-        outcome: "1",
-        probability:
-          markets.oneXTwo.home
-      },
-      {
-        outcome: "X",
-        probability:
-          markets.oneXTwo.draw
-      },
-      {
-        outcome: "2",
-        probability:
-          markets.oneXTwo.away
-      }
-    ].sort(
-      (a, b) =>
-        b.probability -
-        a.probability
-    );
+    /*
+     * -----------------------------------------------------
+     * RISPOSTA
+     * -----------------------------------------------------
+     */
 
     return res.status(200).json({
+
       ok: true,
 
+      competition,
+
       match: {
-        home: homeTeam,
-        away: awayTeam
+
+        homeTeam,
+
+        awayTeam,
+
+        id:
+          body.match?.id ??
+          null,
+
+        kickoff:
+          body.match?.kickoff ??
+          null,
+
+        status:
+          body.match?.status ??
+          null
       },
 
-      model: {
-        name: "Poisson + Dixon-Coles",
-        xG: {
-          home: Number(
+
+      xgSource,
+
+
+      inputXG: {
+
+        home:
+          Number(
             homeXG.toFixed(3)
           ),
-          away: Number(
+
+        away:
+          Number(
             awayXG.toFixed(3)
           )
-        },
-
-        xGSource: xgSource,
-
-        confidence
       },
 
-      prediction: {
-        oneXTwo:
-          markets.oneXTwo,
 
-        mostLikely:
-          outcomes[0],
+      expectedGoals: {
 
-        doubleChance:
-          markets.doubleChance,
+        home:
+          Number(
+            homeXG.toFixed(3)
+          ),
 
-        overUnder:
-          markets.overUnder,
-
-        btts:
-          markets.btts,
-
-        exactScores:
-          markets.exactScores
+        away:
+          Number(
+            awayXG.toFixed(3)
+          )
       },
 
-      fairOdds: fair,
 
-      topScore,
+      probabilities,
 
-      inputs: {
-        homeStanding,
-        awayStanding
-      },
 
-      generatedAt:
-        new Date().toISOString()
+      exactScores,
+
+
+      fairOdds:
+        odds,
+
+
+      confidence,
+
+
+      model: {
+
+        name:
+          "Poisson + Dixon-Coles",
+
+        maxGoals:
+          MAX_GOALS,
+
+        rho:
+          DIXON_COLES_RHO
+      }
+
     });
 
   } catch (error) {
+
+    console.error(
+      "Predict error:",
+      error
+    );
+
+
     return res.status(500).json({
+
       ok: false,
-      error: "PREDICTION_FAILED",
+
+      error:
+        "PREDICTION_ERROR",
+
       message:
         error?.message ||
         "Errore durante il calcolo della previsione."
