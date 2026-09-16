@@ -1,15 +1,32 @@
 const BBS_BASE = "https://api.bigballsdata.com";
 const LEAGUE = "serie-a";
 const SPORT = "football";
+
 const TIMEOUT = 10000;
 
-// Numero massimo di partite per cui proviamo a recuperare
-// stats e lineups. Evita di fare troppe chiamate API.
-const MAX_DETAIL_MATCHES = 20;
+// Numero massimo di partite storiche da scaricare
+const HISTORICAL_MATCH_LIMIT = 100;
 
-async function bbsFetch(path, key) {
+// Numero massimo di partite storiche per cui chiedere gli xG.
+// Manteniamo il consumo API sotto controllo.
+const HISTORICAL_DETAIL_LIMIT = 20;
+
+// Numero massimo di partite future per cui proviamo lineups/stats.
+const FUTURE_DETAIL_LIMIT = 20;
+
+function getApiKey() {
+  return process.env.BBS_API_KEY || "";
+}
+
+async function bbsFetch(path) {
+  const key = getApiKey();
+
+  if (!key) {
+    throw new Error("BBS_API_KEY non configurata su Vercel");
+  }
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT);
+  const timer = setTimeout(() => controller.abort(), TIMEOUT);
 
   try {
     const response = await fetch(`${BBS_BASE}${path}`, {
@@ -24,263 +41,402 @@ async function bbsFetch(path, key) {
 
     const text = await response.text();
 
-    let data = null;
+    let body;
 
     try {
-      data = text ? JSON.parse(text) : null;
+      body = text ? JSON.parse(text) : null;
     } catch {
-      data = text;
+      body = text;
     }
 
     if (!response.ok) {
       const error = new Error(
-        `BBS ${response.status} ${response.statusText}`
+        `BBS ${response.status}: ${
+          typeof body === "string"
+            ? body.slice(0, 500)
+            : JSON.stringify(body).slice(0, 500)
+        }`
       );
 
       error.status = response.status;
-      error.body =
-        typeof data === "string"
-          ? data.slice(0, 500)
-          : JSON.stringify(data).slice(0, 1000);
+      error.body = body;
 
       throw error;
     }
 
-    return data;
+    return body;
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(timer);
   }
 }
 
-function arrayFrom(value) {
-  if (Array.isArray(value)) return value;
+function arrayFrom(payload) {
+  if (Array.isArray(payload)) return payload;
 
-  if (Array.isArray(value?.data)) return value.data;
-  if (Array.isArray(value?.matches)) return value.matches;
-  if (Array.isArray(value?.results)) return value.results;
-  if (Array.isArray(value?.standings)) return value.standings;
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
+
+  if (Array.isArray(payload?.matches)) {
+    return payload.matches;
+  }
+
+  if (Array.isArray(payload?.results)) {
+    return payload.results;
+  }
 
   return [];
 }
 
-function firstDefined(...values) {
-  return values.find(
-    (value) => value !== undefined && value !== null && value !== ""
-  );
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : null;
 }
 
-function normalizeMatch(raw) {
-  const homeTeam = firstDefined(
-    raw.homeTeam,
-    raw.home_team,
-    raw.home?.name,
-    raw.teams?.home?.name,
-    raw.home
-  );
+function firstNumber(...values) {
+  for (const value of values) {
+    const number = toNumber(value);
 
-  const awayTeam = firstDefined(
-    raw.awayTeam,
-    raw.away_team,
-    raw.away?.name,
-    raw.teams?.away?.name,
-    raw.away
-  );
-
-  const id = firstDefined(
-    raw.id,
-    raw.matchId,
-    raw.match_id,
-    raw.fixtureId,
-    raw.fixture_id
-  );
-
-  const kickoff = firstDefined(
-    raw.kickoff,
-    raw.kickoffTime,
-    raw.kickoff_time,
-    raw.startTime,
-    raw.start_time,
-    raw.date,
-    raw.matchDate,
-    raw.match_date,
-    raw.utcDate,
-    raw.utc_date
-  );
-
-  const status = firstDefined(
-    raw.status,
-    raw.matchStatus,
-    raw.match_status,
-    raw.fixture?.status?.short,
-    raw.fixture?.status?.long
-  );
-
-  const matchday = firstDefined(
-    raw.matchday,
-    raw.matchDay,
-    raw.match_day,
-    raw.round,
-    raw.week
-  );
-
-  const homeScore = firstDefined(
-    raw.homeScore,
-    raw.home_score,
-    raw.score?.home,
-    raw.scores?.home,
-    raw.result?.home
-  );
-
-  const awayScore = firstDefined(
-    raw.awayScore,
-    raw.away_score,
-    raw.score?.away,
-    raw.scores?.away,
-    raw.result?.away
-  );
-
-  return {
-    id: id ?? null,
-    homeTeam: homeTeam ?? null,
-    awayTeam: awayTeam ?? null,
-    kickoff: kickoff ?? null,
-    status: status ?? "scheduled",
-    matchday: matchday ?? null,
-    homeScore: homeScore ?? null,
-    awayScore: awayScore ?? null,
-    xG: null,
-    lineups: null,
-  };
-}
-
-function extractXG(value) {
-  if (!value || typeof value !== "object") return null;
-
-  const candidates = [
-    value.xG,
-    value.xg,
-    value.expectedGoals,
-    value.expected_goals,
-    value.expectedGoalsHome,
-    value.expected_goals_home,
-  ];
-
-  // Caso classico:
-  // { xG: { home: 1.4, away: 0.8 } }
-  if (value.xG && typeof value.xG === "object") {
-    const home = firstDefined(
-      value.xG.home,
-      value.xG.homeXG,
-      value.xG.home_xg,
-      value.xG.homeExpectedGoals
-    );
-
-    const away = firstDefined(
-      value.xG.away,
-      value.xG.awayXG,
-      value.xG.away_xg,
-      value.xG.awayExpectedGoals
-    );
-
-    if (home != null && away != null) {
-      return {
-        homeXG: Number(home),
-        awayXG: Number(away),
-      };
+    if (number !== null) {
+      return number;
     }
   }
-
-  // Caso:
-  // { expectedGoals: { home: ..., away: ... } }
-  if (
-    value.expectedGoals &&
-    typeof value.expectedGoals === "object"
-  ) {
-    const home = firstDefined(
-      value.expectedGoals.home,
-      value.expectedGoals.homeXG,
-      value.expectedGoals.home_xg
-    );
-
-    const away = firstDefined(
-      value.expectedGoals.away,
-      value.expectedGoals.awayXG,
-      value.expectedGoals.away_xg
-    );
-
-    if (home != null && away != null) {
-      return {
-        homeXG: Number(home),
-        awayXG: Number(away),
-      };
-    }
-  }
-
-  // Caso root:
-  // { homeXG: 1.4, awayXG: 0.8 }
-  const homeRoot = firstDefined(
-    value.homeXG,
-    value.home_xg,
-    value.homeExpectedGoals,
-    value.home_expected_goals
-  );
-
-  const awayRoot = firstDefined(
-    value.awayXG,
-    value.away_xg,
-    value.awayExpectedGoals,
-    value.away_expected_goals
-  );
-
-  if (homeRoot != null && awayRoot != null) {
-    return {
-      homeXG: Number(homeRoot),
-      awayXG: Number(awayRoot),
-    };
-  }
-
-  // Caso data wrapper
-  if (value.data && typeof value.data === "object") {
-    return extractXG(value.data);
-  }
-
-  // Caso results/matches
-  if (Array.isArray(value.results) && value.results.length) {
-    return extractXG(value.results[0]);
-  }
-
-  if (Array.isArray(value.matches) && value.matches.length) {
-    return extractXG(value.matches[0]);
-  }
-
-  // Evitiamo di usare candidati inutilizzati, ma lasciamo
-  // la funzione compatibile con possibili formati BBS.
-  void candidates;
 
   return null;
 }
 
-function normalizeLineups(value) {
-  if (!value) return null;
+function teamName(team) {
+  if (!team) return null;
 
-  if (Array.isArray(value)) {
-    return value;
+  if (typeof team === "string") {
+    return team;
   }
 
-  if (Array.isArray(value.lineups)) {
-    return value.lineups;
+  return (
+    team.name ||
+    team.short_name ||
+    team.shortName ||
+    team.display_name ||
+    team.displayName ||
+    null
+  );
+}
+
+function normalizeMatch(match) {
+  if (!match) return null;
+
+  const home =
+    teamName(match.home) ||
+    match.homeTeam ||
+    match.home_team ||
+    match.home_name ||
+    null;
+
+  const away =
+    teamName(match.away) ||
+    match.awayTeam ||
+    match.away_team ||
+    match.away_name ||
+    null;
+
+  const score = match.score || match.scores || match.result || null;
+
+  const homeScore = firstNumber(
+    score?.home,
+    score?.home_score,
+    score?.homeScore,
+    match.homeScore,
+    match.home_score
+  );
+
+  const awayScore = firstNumber(
+    score?.away,
+    score?.away_score,
+    score?.awayScore,
+    match.awayScore,
+    match.away_score
+  );
+
+  return {
+    id: match.id || match.match_id || null,
+
+    homeTeam: home,
+
+    awayTeam: away,
+
+    kickoff:
+      match.kickoff_utc ||
+      match.kickoffUtc ||
+      match.kickoff ||
+      match.start_time ||
+      match.startTime ||
+      null,
+
+    status: match.status || null,
+
+    matchday:
+      match.matchday ||
+      match.match_day ||
+      match.round ||
+      null,
+
+    homeScore,
+
+    awayScore,
+
+    raw: match,
+  };
+}
+
+function isCompletedMatch(match) {
+  if (!match) return false;
+
+  const status = String(match.status || "").toLowerCase();
+
+  const completedStatuses = [
+    "finished",
+    "completed",
+    "final",
+    "ft",
+    "ended",
+    "post",
+    "closed",
+  ];
+
+  if (completedStatuses.some((value) => status.includes(value))) {
+    return true;
   }
 
-  if (Array.isArray(value.data)) {
-    return value.data;
+  return (
+    match.homeScore !== null &&
+    match.awayScore !== null
+  );
+}
+
+/**
+ * Cerca xG in diversi formati possibili.
+ *
+ * Big Balls Data documenta il campo xG come match stat.
+ * Manteniamo comunque il parser tollerante per eventuali
+ * variazioni dell'envelope.
+ */
+function extractTeamXG(statsPayload, homeTeam, awayTeam) {
+  if (!statsPayload) return null;
+
+  const candidates = [];
+
+  function collect(value, depth = 0) {
+    if (value === null || value === undefined || depth > 6) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        collect(item, depth + 1);
+      }
+
+      return;
+    }
+
+    if (typeof value !== "object") {
+      return;
+    }
+
+    candidates.push(value);
+
+    for (const child of Object.values(value)) {
+      if (child && typeof child === "object") {
+        collect(child, depth + 1);
+      }
+    }
   }
 
-  if (Array.isArray(value.results)) {
-    return value.results;
+  collect(statsPayload);
+
+  let homeXG = null;
+  let awayXG = null;
+
+  for (const obj of candidates) {
+    const objHome =
+      obj.home ||
+      obj.homeTeam ||
+      obj.home_team ||
+      obj.homeStats ||
+      obj.home_stats;
+
+    const objAway =
+      obj.away ||
+      obj.awayTeam ||
+      obj.away_team ||
+      obj.awayStats ||
+      obj.away_stats;
+
+    if (objHome && typeof objHome === "object") {
+      homeXG = firstNumber(
+        homeXG,
+        objHome.xg,
+        objHome.xG,
+        objHome.expected_goals,
+        objHome.expectedGoals,
+        objHome.expected_goals_for,
+        objHome.expectedGoalsFor
+      );
+    }
+
+    if (objAway && typeof objAway === "object") {
+      awayXG = firstNumber(
+        awayXG,
+        objAway.xg,
+        objAway.xG,
+        objAway.expected_goals,
+        objAway.expectedGoals,
+        objAway.expected_goals_for,
+        objAway.expectedGoalsFor
+      );
+    }
+
+    homeXG = firstNumber(
+      homeXG,
+      obj.home_xg,
+      obj.homeXG,
+      obj.home_expected_goals,
+      obj.homeExpectedGoals,
+      obj.xg_home,
+      obj.xGHome
+    );
+
+    awayXG = firstNumber(
+      awayXG,
+      obj.away_xg,
+      obj.awayXG,
+      obj.away_expected_goals,
+      obj.awayExpectedGoals,
+      obj.xg_away,
+      obj.xGAway
+    );
   }
 
-  if (value.data && typeof value.data === "object") {
-    return normalizeLineups(value.data);
+  /**
+   * Alcuni envelope possono esporre direttamente:
+   * {
+   *   home: { xg: ... },
+   *   away: { xg: ... }
+   * }
+   */
+  if (
+    homeXG === null &&
+    awayXG === null &&
+    statsPayload.data &&
+    typeof statsPayload.data === "object" &&
+    !Array.isArray(statsPayload.data)
+  ) {
+    const data = statsPayload.data;
+
+    homeXG = firstNumber(
+      data.home?.xg,
+      data.home?.xG,
+      data.home_xg,
+      data.homeXG
+    );
+
+    awayXG = firstNumber(
+      data.away?.xg,
+      data.away?.xG,
+      data.away_xg,
+      data.awayXG
+    );
+  }
+
+  if (homeXG === null && awayXG === null) {
+    return null;
+  }
+
+  return {
+    homeTeam,
+    awayTeam,
+    homeXG,
+    awayXG,
+  };
+}
+
+function addTeamXG(teamXG, team, xgFor, xgAgainst) {
+  if (!team) return;
+
+  const cleanFor = toNumber(xgFor);
+  const cleanAgainst = toNumber(xgAgainst);
+
+  if (cleanFor === null && cleanAgainst === null) {
+    return;
+  }
+
+  if (!teamXG[team]) {
+    teamXG[team] = {
+      matches: 0,
+      xgFor: 0,
+      xgAgainst: 0,
+      samples: 0,
+    };
+  }
+
+  const row = teamXG[team];
+
+  row.matches += 1;
+
+  if (cleanFor !== null) {
+    row.xgFor += cleanFor;
+  }
+
+  if (cleanAgainst !== null) {
+    row.xgAgainst += cleanAgainst;
+  }
+
+  row.samples += 1;
+}
+
+function finalizeTeamXG(teamXG) {
+  const result = {};
+
+  for (const [team, row] of Object.entries(teamXG)) {
+    if (!row.samples) continue;
+
+    result[team] = {
+      matches: row.matches,
+
+      xgFor: Number(
+        (row.xgFor / row.samples).toFixed(3)
+      ),
+
+      xgAgainst: Number(
+        (row.xgAgainst / row.samples).toFixed(3)
+      ),
+    };
+  }
+
+  return result;
+}
+
+function normalizeLineups(payload) {
+  if (!payload) return null;
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload.data)) {
+    return payload.data;
+  }
+
+  if (Array.isArray(payload.lineups)) {
+    return payload.lineups;
+  }
+
+  if (payload.data?.lineups && Array.isArray(payload.data.lineups)) {
+    return payload.data.lineups;
   }
 
   return null;
@@ -288,263 +444,429 @@ function normalizeLineups(value) {
 
 function formatError(error) {
   return {
-    message: error?.message || "Unknown error",
     status: error?.status || null,
-    body: error?.body || null,
+    message: error?.message || String(error),
+    body:
+      typeof error?.body === "string"
+        ? error.body.slice(0, 1000)
+        : error?.body || null,
   };
 }
 
-async function getDetails(matches, key) {
-  /*
-   * IMPORTANTE:
-   * Prima filtravamo obbligatoriamente per kickoff.
-   * Il feed /v1/matches che stai ricevendo non sta restituendo
-   * kickoff, quindi il filtro produceva 0 partite.
-   *
-   * Ora usiamo semplicemente le prime MAX_DETAIL_MATCHES
-   * partite con un ID valido.
-   */
-
+async function getFutureDetails(matches) {
   const candidates = matches
     .filter((match) => match?.id)
-    .slice(0, MAX_DETAIL_MATCHES);
+    .slice(0, FUTURE_DETAIL_LIMIT);
 
-  const enriched = [];
+  const details = [];
 
   for (const match of candidates) {
-    const result = {
-      ...match,
+    const detail = {
+      id: match.id,
       xG: null,
       lineups: null,
-      detailErrors: [],
+      errors: [],
     };
 
-    // -------------------------
-    // STATS
-    // -------------------------
+    // Stats
     try {
       const stats = await bbsFetch(
-        `/v1/stored/matches/${encodeURIComponent(match.id)}/stats`,
-        key
+        `/v1/stored/matches/${encodeURIComponent(
+          match.id
+        )}/stats`
       );
 
-      const xG = extractXG(stats);
+      const xg = extractTeamXG(
+        stats,
+        match.homeTeam,
+        match.awayTeam
+      );
 
-      if (xG) {
-        result.xG = xG;
+      if (xg) {
+        detail.xG = xg;
       }
     } catch (error) {
-      console.warn(
-        "BBS stats error",
-        match.id,
-        formatError(error)
-      );
-
-      result.detailErrors.push({
+      detail.errors.push({
         type: "stats",
         ...formatError(error),
       });
     }
 
-    // -------------------------
-    // LINEUPS
-    // -------------------------
+    // Lineups
     try {
       const lineups = await bbsFetch(
-        `/v1/stored/matches/${encodeURIComponent(match.id)}/lineups`,
-        key
+        `/v1/stored/matches/${encodeURIComponent(
+          match.id
+        )}/lineups`
       );
 
-      result.lineups = normalizeLineups(lineups);
+      detail.lineups = normalizeLineups(lineups);
     } catch (error) {
-      console.warn(
-        "BBS lineups error",
-        match.id,
-        formatError(error)
-      );
-
-      result.detailErrors.push({
+      detail.errors.push({
         type: "lineups",
         ...formatError(error),
       });
     }
 
-    enriched.push(result);
+    details.push(detail);
   }
 
-  return enriched;
+  return details;
+}
+
+async function getHistoricalXG() {
+  const diagnostics = [];
+
+  let historicalPayload;
+
+  try {
+    historicalPayload = await bbsFetch(
+      `/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&limit=${HISTORICAL_MATCH_LIMIT}`
+    );
+  } catch (error) {
+    diagnostics.push({
+      type: "historical_matches",
+      ...formatError(error),
+    });
+
+    return {
+      teamXG: {},
+      historicalMatches: [],
+      xGCount: 0,
+      diagnostics,
+    };
+  }
+
+  const historicalMatches = arrayFrom(historicalPayload)
+    .map(normalizeMatch)
+    .filter(Boolean)
+    .filter(isCompletedMatch);
+
+  /**
+   * Ordiniamo dalla partita più recente alla più vecchia.
+   */
+  historicalMatches.sort((a, b) => {
+    const dateA = a.kickoff
+      ? new Date(a.kickoff).getTime()
+      : 0;
+
+    const dateB = b.kickoff
+      ? new Date(b.kickoff).getTime()
+      : 0;
+
+    return dateB - dateA;
+  });
+
+  const selected = historicalMatches.slice(
+    0,
+    HISTORICAL_DETAIL_LIMIT
+  );
+
+  const teamAccumulator = {};
+  let xGCount = 0;
+
+  for (const match of selected) {
+    if (!match.id) continue;
+
+    try {
+      const stats = await bbsFetch(
+        `/v1/stored/matches/${encodeURIComponent(
+          match.id
+        )}/stats`
+      );
+
+      const xg = extractTeamXG(
+        stats,
+        match.homeTeam,
+        match.awayTeam
+      );
+
+      if (!xg) {
+        diagnostics.push({
+          type: "historical_stats",
+          matchId: match.id,
+          message: "Stats returned but xG fields were not found",
+        });
+
+        continue;
+      }
+
+      if (
+        xg.homeXG === null &&
+        xg.awayXG === null
+      ) {
+        continue;
+      }
+
+      addTeamXG(
+        teamAccumulator,
+        match.homeTeam,
+        xg.homeXG,
+        xg.awayXG
+      );
+
+      addTeamXG(
+        teamAccumulator,
+        match.awayTeam,
+        xg.awayXG,
+        xg.homeXG
+      );
+
+      xGCount += 1;
+    } catch (error) {
+      diagnostics.push({
+        type: "historical_stats",
+        matchId: match.id,
+        homeTeam: match.homeTeam,
+        awayTeam: match.awayTeam,
+        ...formatError(error),
+      });
+    }
+  }
+
+  return {
+    teamXG: finalizeTeamXG(teamAccumulator),
+    historicalMatches: selected,
+    xGCount,
+    diagnostics,
+  };
+}
+
+async function getStandings() {
+  try {
+    const payload = await bbsFetch(
+      `/v1/standings?sport=${SPORT}&league=${LEAGUE}`
+    );
+
+    return {
+      standings: arrayFrom(payload),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      standings: [],
+      error: formatError(error),
+    };
+  }
+}
+
+async function getCurrentMatches() {
+  const payload = await bbsFetch(
+    `/v1/matches?sport=${SPORT}&league=${LEAGUE}`
+  );
+
+  return arrayFrom(payload)
+    .map(normalizeMatch)
+    .filter(Boolean);
+}
+
+function enrichMatches(matches, details) {
+  const detailMap = new Map();
+
+  for (const detail of details) {
+    detailMap.set(detail.id, detail);
+  }
+
+  return matches.map((match) => {
+    const detail = detailMap.get(match.id);
+
+    if (!detail) {
+      return {
+        ...match,
+        xG: null,
+        lineups: null,
+        detailErrors: [],
+      };
+    }
+
+    return {
+      ...match,
+
+      xG: detail.xG
+        ? {
+            home: detail.xG.homeXG,
+            away: detail.xG.awayXG,
+          }
+        : null,
+
+      lineups: detail.lineups,
+
+      detailErrors: detail.errors || [],
+    };
+  });
 }
 
 export default async function handler(req, res) {
-  // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Cache-Control", "no-store");
-
-  if (req.method !== "GET") {
+  if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({
       ok: false,
-      error: "METHOD_NOT_ALLOWED",
+      error: "Method not allowed",
     });
   }
 
-  const key = process.env.BBS_API_KEY;
-
-  if (!key) {
-    return res.status(500).json({
-      ok: false,
-      error: "BBS_API_KEY_MISSING",
-      message:
-        "Vercel non trova la variabile BBS_API_KEY.",
-    });
-  }
+  const generatedAt = new Date().toISOString();
 
   try {
-    // -------------------------
-    // MATCHES
-    // -------------------------
-    const matchesResponse = await bbsFetch(
-      `/v1/matches?sport=${encodeURIComponent(
-        SPORT
-      )}&league=${encodeURIComponent(LEAGUE)}`,
-      key
-    );
-
-    const rawMatches = arrayFrom(matchesResponse);
-
-    const matches = rawMatches
-      .map(normalizeMatch)
-      .filter(
-        (match) =>
-          match.homeTeam &&
-          match.awayTeam
-      );
-
-    // -------------------------
-    // STANDINGS
-    // -------------------------
-    let standings = [];
-    let standingsError = null;
-
-    try {
-      const standingsResponse = await bbsFetch(
-        `/v1/standings?sport=${encodeURIComponent(
-          SPORT
-        )}&league=${encodeURIComponent(LEAGUE)}`,
-        key
-      );
-
-      standings = arrayFrom(standingsResponse);
-    } catch (error) {
-      standingsError = formatError(error);
-
-      console.warn(
-        "BBS standings error",
-        standingsError
-      );
+    if (!getApiKey()) {
+      return res.status(500).json({
+        ok: false,
+        error: "BBS_API_KEY non configurata",
+      });
     }
 
-    // -------------------------
-    // DETAILS
-    // -------------------------
-    const details = await getDetails(
+    /**
+     * 1. Partite correnti / future
+     */
+    const matches = await getCurrentMatches();
+
+    /**
+     * 2. Dettagli delle partite correnti.
+     * Non ci aspettiamo necessariamente xG per partite future.
+     */
+    const futureDetails = await getFutureDetails(matches);
+
+    /**
+     * 3. Storico + xG delle partite concluse.
+     */
+    const historical = await getHistoricalXG();
+
+    /**
+     * 4. Classifica.
+     */
+    const standingsResult = await getStandings();
+
+    /**
+     * 5. Uniamo i dettagli alle partite correnti.
+     */
+    const enrichedMatches = enrichMatches(
       matches,
-      key
+      futureDetails
     );
 
-    const detailsById = new Map(
-      details.map((match) => [
-        String(match.id),
-        match,
-      ])
-    );
-
-    const enrichedMatches = matches.map(
-      (match) => {
-        const detail = detailsById.get(
-          String(match.id)
-        );
-
-        if (!detail) {
-          return match;
-        }
-
-        return {
-          ...match,
-          xG: detail.xG,
-          lineups: detail.lineups,
-          detailErrors:
-            detail.detailErrors || [],
-        };
-      }
-    );
-
-    // -------------------------
-    // COVERAGE
-    // -------------------------
-    const xGCount = enrichedMatches.filter(
+    /**
+     * xG disponibili direttamente sulle partite correnti.
+     */
+    const directXGCount = enrichedMatches.filter(
       (match) =>
         match.xG &&
-        Number.isFinite(
-          Number(match.xG.homeXG)
-        ) &&
-        Number.isFinite(
-          Number(match.xG.awayXG)
-        )
+        match.xG.home !== null &&
+        match.xG.away !== null
     ).length;
 
+    /**
+     * Lineups disponibili.
+     */
     const lineupCount = enrichedMatches.filter(
       (match) =>
         Array.isArray(match.lineups) &&
         match.lineups.length > 0
     ).length;
 
+    /**
+     * Errori dei dettagli delle partite correnti.
+     */
+    const detailErrors = futureDetails
+      .filter(
+        (detail) =>
+          Array.isArray(detail.errors) &&
+          detail.errors.length > 0
+      )
+      .map((detail) => ({
+        matchId: detail.id,
+        errors: detail.errors,
+      }));
+
     return res.status(200).json({
       ok: true,
+
       source: "Big Balls Sports Data",
+
       league: LEAGUE,
-      generatedAt: new Date().toISOString(),
+
+      generatedAt,
 
       coverage: {
         matches: enrichedMatches.length,
-        detailsAttempted: details.length,
-        xG: xGCount,
+
+        detailsAttempted: futureDetails.length,
+
+        /**
+         * Questo conta gli xG storici recuperati.
+         * È il numero che interessa al predictor.
+         */
+        xG: historical.xGCount,
+
+        /**
+         * xG presenti direttamente sulle partite future.
+         */
+        directMatchXG: directXGCount,
+
         lineups: lineupCount,
+
+        standings: standingsResult.standings.length,
+
+        historicalMatches:
+          historical.historicalMatches.length,
+
+        teamsWithXG:
+          Object.keys(historical.teamXG).length,
       },
+
+      /**
+       * Media xG storica per squadra.
+       *
+       * Esempio:
+       * {
+       *   "Inter Milan": {
+       *     matches: 5,
+       *     xgFor: 1.92,
+       *     xgAgainst: 0.81
+       *   }
+       * }
+       */
+      teamXG: historical.teamXG,
 
       diagnostics: {
         apiKeyDetected: true,
-        standingsAvailable: standings.length > 0,
-        standingsError,
-        detailErrors: details
-          .filter(
-            (match) =>
-              Array.isArray(
-                match.detailErrors
-              ) &&
-              match.detailErrors.length > 0
-          )
-          .slice(0, 10)
-          .map((match) => ({
-            id: match.id,
-            homeTeam: match.homeTeam,
-            awayTeam: match.awayTeam,
-            errors: match.detailErrors,
-          })),
+
+        standingsAvailable:
+          standingsResult.standings.length > 0,
+
+        standingsError:
+          standingsResult.error,
+
+        detailErrors,
+
+        historicalErrors:
+          historical.diagnostics,
       },
 
       matches: enrichedMatches,
-      standings,
+
+      standings: standingsResult.standings,
     });
   } catch (error) {
-    console.error(
-      "BBS sync fatal error:",
-      formatError(error)
-    );
+    console.error("SYNC ERROR", error);
 
     return res.status(500).json({
       ok: false,
-      error: "BBS_SYNC_FAILED",
-      details: formatError(error),
+
+      error:
+        error?.message ||
+        "Errore durante sincronizzazione BBS",
+
+      generatedAt,
+
+      diagnostics: {
+        apiKeyDetected: Boolean(getApiKey()),
+
+        status: error?.status || null,
+
+        body:
+          typeof error?.body === "string"
+            ? error.body.slice(0, 1000)
+            : error?.body || null,
+      },
     });
   }
 }
