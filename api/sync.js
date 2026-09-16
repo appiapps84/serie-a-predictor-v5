@@ -1,35 +1,26 @@
 const BBS_BASE = "https://api.bigballsdata.com";
 const API_KEY = process.env.BBS_API_KEY;
 
-const TIMEOUT = 8000;
+const SPORT = "football";
+const LEAGUE = "seriea";
+
+const MATCH_TIMEOUT = 8000;
+const OPTIONAL_TIMEOUT = 5000;
 
 function handler(req, res) {
   run(res);
 }
 
-async function run(res) {
-  const started = Date.now();
-
-  if (!API_KEY) {
-    return res.status(500).json({
-      ok: false,
-      error: "BBS_API_KEY non configurata"
-    });
-  }
-
+async function fetchBBS(path, timeoutMs) {
   const controller = new AbortController();
 
   const timer = setTimeout(() => {
     controller.abort();
-  }, TIMEOUT);
+  }, timeoutMs);
 
   try {
-    const url =
-      `${BBS_BASE}/v1/matches?sport=football&league=seriea`;
-
-    console.log("BBS REQUEST:", url);
-
-    const response = await fetch(url, {
+    const response = await fetch(`${BBS_BASE}${path}`, {
+      method: "GET",
       headers: {
         Accept: "application/json",
         "X-API-Key": API_KEY,
@@ -37,13 +28,6 @@ async function run(res) {
       },
       signal: controller.signal
     });
-
-    console.log(
-      "BBS STATUS:",
-      response.status,
-      "TIME:",
-      Date.now() - started
-    );
 
     const text = await response.text();
 
@@ -55,56 +39,208 @@ async function run(res) {
       data = text;
     }
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        ok: false,
-        error: `BBS HTTP ${response.status}`,
-        body: data,
-        elapsedMs: Date.now() - started
-      });
-    }
-
-    const matches =
-      Array.isArray(data)
-        ? data
-        : Array.isArray(data.matches)
-          ? data.matches
-          : Array.isArray(data.data)
-            ? data.data
-            : [];
-
-    return res.status(200).json({
-      ok: true,
-      source: "Big Balls Sports Data",
-      matches,
-      coverage: {
-        matches: matches.length
-      },
-      elapsedMs: Date.now() - started
-    });
-
+    return {
+      status: response.status,
+      ok: response.ok,
+      data
+    };
   } catch (error) {
-
-    console.error("BBS ERROR:", error);
-
     if (error.name === "AbortError") {
-      return res.status(504).json({
+      return {
+        status: 504,
         ok: false,
-        error: "Big Balls Data non ha risposto entro 8 secondi",
-        code: "BBS_TIMEOUT",
-        elapsedMs: Date.now() - started
-      });
+        timeout: true,
+        data: null
+      };
     }
 
-    return res.status(500).json({
+    return {
+      status: 500,
       ok: false,
       error: error.message,
-      elapsedMs: Date.now() - started
-    });
-
+      data: null
+    };
   } finally {
     clearTimeout(timer);
   }
+}
+
+function extractArray(data, keys = []) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (!data || typeof data !== "object") {
+    return [];
+  }
+
+  for (const key of keys) {
+    if (Array.isArray(data[key])) {
+      return data[key];
+    }
+  }
+
+  if (Array.isArray(data.data)) {
+    return data.data;
+  }
+
+  if (
+    data.data &&
+    typeof data.data === "object"
+  ) {
+    for (const key of keys) {
+      if (Array.isArray(data.data[key])) {
+        return data.data[key];
+      }
+    }
+  }
+
+  return [];
+}
+
+async function run(res) {
+  const started = Date.now();
+
+  const diagnostics = {
+    apiKeyDetected: Boolean(API_KEY),
+    requests: 0,
+    matches: {
+      status: null,
+      elapsedMs: null
+    },
+    standings: {
+      status: null,
+      elapsedMs: null
+    }
+  };
+
+  if (!API_KEY) {
+    return res.status(500).json({
+      ok: false,
+      error: "BBS_API_KEY non configurata su Vercel.",
+      diagnostics
+    });
+  }
+
+  // ==========================================================
+  // 1. MATCHES — OBBLIGATORIO
+  // ==========================================================
+
+  const matchStart = Date.now();
+
+  diagnostics.requests++;
+
+  const matchesResult = await fetchBBS(
+    `/v1/matches?sport=${SPORT}&league=${LEAGUE}`,
+    MATCH_TIMEOUT
+  );
+
+  diagnostics.matches.status =
+    matchesResult.status;
+
+  diagnostics.matches.elapsedMs =
+    Date.now() - matchStart;
+
+  if (!matchesResult.ok) {
+    return res.status(
+      matchesResult.timeout
+        ? 504
+        : matchesResult.status || 500
+    ).json({
+      ok: false,
+
+      error:
+        matchesResult.timeout
+          ? "Big Balls Data non ha risposto entro 8 secondi."
+          : `Errore Big Balls Data HTTP ${matchesResult.status}.`,
+
+      body: matchesResult.data || null,
+
+      diagnostics: {
+        ...diagnostics,
+        totalElapsedMs: Date.now() - started
+      }
+    });
+  }
+
+  const matches = extractArray(
+    matchesResult.data,
+    [
+      "matches",
+      "fixtures",
+      "events"
+    ]
+  );
+
+  // ==========================================================
+  // 2. STANDINGS — OPZIONALE
+  // ==========================================================
+
+  let standings = [];
+
+  const standingsStart = Date.now();
+
+  diagnostics.requests++;
+
+  const standingsResult = await fetchBBS(
+    `/v1/standings?sport=${SPORT}&league=${LEAGUE}`,
+    OPTIONAL_TIMEOUT
+  );
+
+  diagnostics.standings.status =
+    standingsResult.status;
+
+  diagnostics.standings.elapsedMs =
+    Date.now() - standingsStart;
+
+  if (standingsResult.ok) {
+    standings = extractArray(
+      standingsResult.data,
+      [
+        "standings",
+        "table",
+        "rows"
+      ]
+    );
+  }
+
+  // ==========================================================
+  // 3. OUTPUT
+  // ==========================================================
+
+  return res.status(200).json({
+    ok: true,
+
+    source: "Big Balls Sports Data",
+
+    league: LEAGUE,
+
+    generatedAt:
+      new Date().toISOString(),
+
+    coverage: {
+      matches: matches.length,
+      xG: 0,
+      teamsWithXG: 0,
+      lineups: 0,
+      standings: standings.length
+    },
+
+    matches,
+
+    // Manteniamo questi campi per il frontend.
+    teamXG: {},
+
+    lineups: [],
+
+    standings,
+
+    diagnostics: {
+      ...diagnostics,
+      totalElapsedMs:
+        Date.now() - started
+    }
+  });
 }
 
 export default handler;
