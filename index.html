@@ -3,611 +3,689 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Serie A Predictor V5</title>
 
   <style>
-    * { box-sizing: border-box; }
-
     :root {
-      --bg: #07111f;
-      --card: #0d1b2d;
-      --card2: #10243b;
-      --border: #1d3855;
+      --bg: #08111f;
+      --panel: #101c2e;
+      --panel-2: #14243a;
+      --border: #263a56;
       --text: #f4f7fb;
-      --muted: #91a4b8;
-      --accent: #36d399;
-      --accent2: #38bdf8;
-      --danger: #fb7185;
-      --warning: #fbbf24;
+      --muted: #9fb0c5;
+      --green: #20c77a;
+      --green-dark: #0f8d58;
+      --red: #ff5d6c;
+      --yellow: #f4c95d;
+      --blue: #5da9ff;
+      --shadow: 0 15px 40px rgba(0,0,0,.25);
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family:
+        Inter,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
     }
 
     body {
-      margin: 0;
-      min-height: 100vh;
-      background:
-        radial-gradient(circle at top, #102b47 0%, var(--bg) 45%);
-      color: var(--text);
-      font-family:
-        Inter, system-ui, -apple-system, BlinkMacSystemFont,
-        "Segoe UI", sans-serif;
+      padding: 24px;
     }
 
-    button, select { font: inherit; }
+    button,
+    select {
+      font: inherit;
+    }
 
     .container {
-      width: min(1180px, 94%);
-      margin: auto;
-      padding: 28px 0 60px;
+      max-width: 1200px;
+      margin: 0 auto;
     }
 
-    header { margin-bottom: 24px; }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-      flex-wrap: wrap;
+    .header {
+      margin-bottom: 22px;
     }
 
-    h1 {
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: 32px;
+      line-height: 1.15;
+    }
+
+    .header p {
       margin: 0;
-      font-size: clamp(28px, 5vw, 46px);
-      letter-spacing: -1.5px;
-    }
-
-    .subtitle {
-      margin-top: 7px;
       color: var(--muted);
       font-size: 14px;
     }
 
-    .actions {
+    .toolbar {
       display: flex;
-      gap: 10px;
       flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 18px;
     }
 
-    button {
+    .btn {
       border: 1px solid var(--border);
-      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
       padding: 11px 16px;
-      color: white;
-      background: var(--card2);
+      border-radius: 10px;
       cursor: pointer;
+      transition: .2s ease;
     }
 
-    button.primary {
-      background: var(--accent);
-      color: #04130d;
-      border-color: transparent;
-      font-weight: 800;
+    .btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: var(--blue);
     }
 
-    button:disabled {
+    .btn:disabled {
       opacity: .55;
       cursor: not-allowed;
     }
 
+    .btn-primary {
+      background: var(--green);
+      border-color: var(--green);
+      color: #04150d;
+      font-weight: 800;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      border-color: var(--green);
+      background: #2bd989;
+    }
+
     .status {
-      margin: 18px 0;
-      padding: 12px 15px;
-      border-radius: 10px;
-      background: rgba(13,27,45,.85);
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
       border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 10px;
       color: var(--muted);
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
       font-size: 14px;
-      word-break: break-word;
     }
 
     .status.ok {
-      border-color: rgba(54,211,153,.4);
-      color: var(--accent);
+      color: #b9f7d8;
+      border-color: rgba(32,199,122,.4);
     }
 
     .status.error {
-      border-color: rgba(251,113,133,.45);
-      color: var(--danger);
+      color: #ffd0d5;
+      border-color: rgba(255,93,108,.5);
     }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(4,minmax(0,1fr));
-      gap: 12px;
-    }
-
-    @media(max-width:900px) {
-      .grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-    }
-
-    @media(max-width:560px) {
-      .grid { grid-template-columns: 1fr; }
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
     }
 
     .card {
-      background:
-        linear-gradient(145deg,
-          rgba(16,36,59,.95),
-          rgba(8,20,34,.95));
+      background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: var(--radius);
       padding: 18px;
-      box-shadow: 0 12px 35px rgba(0,0,0,.2);
+      box-shadow: var(--shadow);
     }
 
-    .card h2 { margin-top: 0; }
-
-    .stat-label {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .8px;
+    .span-12 {
+      grid-column: span 12;
     }
 
-    .stat-value {
-      margin-top: 7px;
-      font-size: 28px;
-      font-weight: 800;
+    .span-8 {
+      grid-column: span 8;
     }
 
-    .section { margin-top: 18px; }
+    .span-6 {
+      grid-column: span 6;
+    }
+
+    .span-4 {
+      grid-column: span 4;
+    }
+
+    .card h2,
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .card h2 {
+      font-size: 19px;
+      margin-bottom: 14px;
+    }
+
+    .card h3 {
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
 
     .controls {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr auto;
+      grid-template-columns: 1fr 1fr 160px;
       gap: 12px;
-      align-items: end;
-    }
-
-    @media(max-width:800px) {
-      .controls { grid-template-columns: 1fr 1fr; }
-    }
-
-    @media(max-width:520px) {
-      .controls { grid-template-columns: 1fr; }
     }
 
     label {
       display: block;
       margin-bottom: 7px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
     }
 
     select {
       width: 100%;
-      padding: 12px;
-      border-radius: 10px;
       border: 1px solid var(--border);
-      background: #091728;
-      color: white;
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px;
       outline: none;
     }
 
-    .match-header {
+    select:focus {
+      border-color: var(--blue);
+    }
+
+    .coverage {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .metric {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .metric .value {
+      font-size: 25px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .metric .label {
+      margin: 0;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .prediction-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
       gap: 15px;
-      flex-wrap: wrap;
+      align-items: flex-start;
       margin-bottom: 15px;
     }
 
     .teams {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 800;
     }
 
-    .vs {
+    .teams span {
       color: var(--muted);
-      margin: 0 7px;
+      font-weight: 500;
+      margin: 0 8px;
     }
 
-    .model-badge {
-      padding: 7px 10px;
+    .confidence {
+      padding: 8px 11px;
       border-radius: 999px;
-      background: rgba(56,189,248,.12);
-      color: var(--accent2);
-      font-size: 12px;
-      font-weight: 700;
+      background: rgba(32,199,122,.12);
+      border: 1px solid rgba(32,199,122,.35);
+      color: #aaf1cc;
+      white-space: nowrap;
+      font-weight: 800;
+      font-size: 13px;
     }
 
-    .xg-row {
+    .markets {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-top: 15px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
     }
 
-    .xg-box {
-      padding: 14px;
-      border-radius: 12px;
-      background: rgba(0,0,0,.18);
+    .market {
+      background: var(--panel-2);
       border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
     }
 
-    .xg-number {
-      font-size: 30px;
-      font-weight: 900;
-      margin-top: 4px;
-    }
-
-    .confidence { margin-top: 15px; }
-
-    .confidence-label {
-      display: flex;
-      justify-content: space-between;
+    .market-title {
       color: var(--muted);
       font-size: 12px;
       margin-bottom: 7px;
     }
 
-    .confidence-bar {
-      height: 9px;
-      overflow: hidden;
-      border-radius: 999px;
-      background: #091522;
-      border: 1px solid var(--border);
-    }
-
-    .confidence-fill {
-      height: 100%;
-      width: 0;
-      background: var(--accent);
-      transition: width .35s;
-    }
-
-    .tabs {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      margin-bottom: 14px;
-    }
-
-    .tab {
-      white-space: nowrap;
-      padding: 9px 13px;
-      border-radius: 9px;
-      font-size: 13px;
-    }
-
-    .tab.active {
-      background: var(--accent2);
-      color: #03111d;
-      border-color: transparent;
+    .market-value {
+      font-size: 22px;
       font-weight: 800;
     }
 
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-
-    .market-grid {
-      display: grid;
-      grid-template-columns: repeat(3,minmax(0,1fr));
-      gap: 10px;
-    }
-
-    @media(max-width:700px) {
-      .market-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-    }
-
-    @media(max-width:450px) {
-      .market-grid { grid-template-columns: 1fr; }
-    }
-
-    .market {
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 13px;
-      background: rgba(0,0,0,.14);
-    }
-
-    .market-name {
+    .market-sub {
+      margin-top: 4px;
       color: var(--muted);
       font-size: 12px;
     }
 
-    .market-prob {
-      margin-top: 4px;
-      font-size: 22px;
-      font-weight: 850;
-    }
-
-    .market-odd {
-      margin-top: 4px;
-      color: var(--accent);
-      font-size: 12px;
-    }
-
-    .score-list {
+    .scores {
       display: grid;
-      gap: 8px;
-    }
-
-    .score-row {
-      display: grid;
-      grid-template-columns: 65px 1fr 70px;
-      align-items: center;
+      grid-template-columns: repeat(5, 1fr);
       gap: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: rgba(0,0,0,.14);
     }
 
     .score {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .score strong {
+      display: block;
       font-size: 18px;
-      font-weight: 850;
+      margin-bottom: 4px;
     }
 
-    .score-bar {
-      height: 8px;
-      border-radius: 999px;
-      background: #081521;
-      overflow: hidden;
-    }
-
-    .score-fill {
-      height: 100%;
-      background: var(--accent2);
-    }
-
-    .score-percent {
-      text-align: right;
+    .score small {
       color: var(--muted);
-      font-size: 13px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
     }
 
-    th, td {
-      padding: 10px 8px;
+    th,
+    td {
+      padding: 10px;
       border-bottom: 1px solid var(--border);
       text-align: left;
+      font-size: 13px;
     }
 
     th {
       color: var(--muted);
-      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
     }
 
     .empty {
-      padding: 25px;
+      color: var(--muted);
+      padding: 18px 0;
       text-align: center;
-      color: var(--muted);
-      border: 1px dashed var(--border);
-      border-radius: 12px;
     }
 
-    .small {
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .json-box {
-      margin-top: 15px;
-      max-height: 400px;
-      overflow: auto;
-      padding: 14px;
-      border-radius: 10px;
-      background: #050d17;
-      border: 1px solid var(--border);
-      color: #b9c8d7;
-      font-size: 11px;
+    .debug {
+      margin: 0;
       white-space: pre-wrap;
       word-break: break-word;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #b9c8da;
+      max-height: 420px;
+      overflow: auto;
+      background: #091321;
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      border-radius: 9px;
+      padding: 9px 12px;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      color: var(--text);
+      border-color: var(--blue);
+      background: rgba(93,169,255,.1);
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .footer {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 20px;
+      text-align: center;
     }
 
     .loading {
-      opacity: .7;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-top-color: var(--text);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .span-8,
+      .span-6,
+      .span-4 {
+        grid-column: span 12;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .coverage {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .markets {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .scores {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 12px;
+      }
+
+      .header h1 {
+        font-size: 25px;
+      }
+
+      .coverage,
+      .markets {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .scores {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .prediction-header {
+        flex-direction: column;
+      }
+
+      .teams {
+        font-size: 19px;
+      }
     }
   </style>
 </head>
 
 <body>
-<main class="container">
 
-  <header>
-    <div class="brand">
-      <div>
-        <h1>Serie A Predictor V5</h1>
-        <div class="subtitle">
-          Poisson + Dixon-Coles · Big Balls Sports Data
-        </div>
-      </div>
+<div class="container">
 
-      <div class="actions">
-        <button id="syncBtn" class="primary">
-          ↻ Sincronizza BBD
-        </button>
-      </div>
-    </div>
+  <header class="header">
+    <h1>⚽ Serie A Predictor V5</h1>
+    <p>Predizioni Poisson + Dixon-Coles con dati Big Balls Sports Data.</p>
   </header>
 
-  <div id="status" class="status">
-    Applicazione pronta.
+  <div class="toolbar">
+    <button id="syncBtn" class="btn btn-primary">
+      🔄 Sincronizza BBD
+    </button>
+
+    <button id="predictBtn" class="btn">
+      🎯 Calcola previsione
+    </button>
   </div>
 
-  <section class="grid">
+  <div id="status" class="status">
+    Pronto. Premi «Sincronizza BBD» per caricare i dati.
+  </div>
 
-    <div class="card">
-      <div class="stat-label">Match</div>
-      <div id="coverageMatches" class="stat-value">—</div>
-    </div>
+  <main class="grid">
 
-    <div class="card">
-      <div class="stat-label">xG</div>
-      <div id="coverageXG" class="stat-value">—</div>
-    </div>
+    <!-- CONTROLLI -->
+    <section class="card span-12">
+      <h2>Partita</h2>
 
-    <div class="card">
-      <div class="stat-label">Lineups</div>
-      <div id="coverageLineups" class="stat-value">—</div>
-    </div>
+      <div class="controls">
 
-    <div class="card">
-      <div class="stat-label">Standings</div>
-      <div id="coverageStandings" class="stat-value">—</div>
-    </div>
+        <div>
+          <label for="homeTeam">Casa</label>
+          <select id="homeTeam"></select>
+        </div>
 
-  </section>
+        <div>
+          <label for="awayTeam">Trasferta</label>
+          <select id="awayTeam"></select>
+        </div>
 
-  <section class="section card">
+        <div>
+          <label for="competition">Competizione</label>
+          <select id="competition">
+            <option value="seriea">Serie A</option>
+            <option value="coppa">Coppa Italia</option>
+          </select>
+        </div>
 
-    <h2>Seleziona partita</h2>
+      </div>
+    </section>
 
-    <div class="controls">
+    <!-- COVERAGE -->
+    <section class="card span-12">
+      <h2>Copertura dati</h2>
 
-      <div>
-        <label for="homeTeam">Casa</label>
-        <select id="homeTeam"></select>
+      <div class="coverage">
+
+        <div class="metric">
+          <div id="coverageMatches" class="value">0</div>
+          <div class="label">Partite</div>
+        </div>
+
+        <div class="metric">
+          <div id="coverageXG" class="value">0</div>
+          <div class="label">Partite con xG</div>
+        </div>
+
+        <div class="metric">
+          <div id="coverageTeamsXG" class="value">0</div>
+          <div class="label">Squadre con xG</div>
+        </div>
+
+        <div class="metric">
+          <div id="coverageLineups" class="value">0</div>
+          <div class="label">Lineup</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- PREDIZIONE -->
+    <section class="card span-12">
+      <div id="predictionEmpty" class="empty">
+        Nessuna previsione disponibile. Sincronizza i dati e poi premi «Calcola previsione».
       </div>
 
-      <div>
-        <label for="awayTeam">Trasferta</label>
-        <select id="awayTeam"></select>
+      <div id="predictionContent" style="display:none;">
+
+        <div class="prediction-header">
+
+          <div>
+            <div class="teams">
+              <span id="predictionHome">-</span>
+              <span>vs</span>
+              <span id="predictionAway">-</span>
+            </div>
+
+            <div id="predictionSource"
+                 style="margin-top:7px;color:var(--muted);font-size:12px;">
+            </div>
+          </div>
+
+          <div id="confidence" class="confidence">
+            Confidence: -
+          </div>
+
+        </div>
+
+        <div class="tabs">
+
+          <button class="tab active" data-tab="markets">
+            Mercati
+          </button>
+
+          <button class="tab" data-tab="scores">
+            Risultati esatti
+          </button>
+
+          <button class="tab" data-tab="odds">
+            Quote fair
+          </button>
+
+        </div>
+
+        <!-- MERCATI -->
+        <div id="tab-markets" class="tab-panel active">
+
+          <div id="markets" class="markets"></div>
+
+        </div>
+
+        <!-- RISULTATI -->
+        <div id="tab-scores" class="tab-panel">
+
+          <div id="scores" class="scores"></div>
+
+        </div>
+
+        <!-- QUOTE -->
+        <div id="tab-odds" class="tab-panel">
+
+          <div id="fairOdds" class="markets"></div>
+
+        </div>
+
       </div>
+    </section>
 
-      <div>
-        <label for="competition">Competizione</label>
+    <!-- STANDINGS -->
+    <section class="card span-6">
 
-        <select id="competition">
-          <option value="seriea">Serie A</option>
-          <option value="coppa">Coppa Italia</option>
-        </select>
-      </div>
+      <h2>Classifica</h2>
 
-      <button id="predictBtn" class="primary">
-        Prevedi
-      </button>
-
-    </div>
-
-  </section>
-
-  <section class="section card">
-
-    <div class="match-header">
-
-      <div id="matchTitle" class="teams">
-        Inter <span class="vs">vs</span> Milan
-      </div>
-
-      <div id="modelBadge" class="model-badge">
-        Modello V5
-      </div>
-
-    </div>
-
-    <div class="xg-row">
-
-      <div class="xg-box">
-        <div class="stat-label">xG Casa</div>
-        <div id="homeXG" class="xg-number">—</div>
-      </div>
-
-      <div class="xg-box">
-        <div class="stat-label">xG Trasferta</div>
-        <div id="awayXG" class="xg-number">—</div>
-      </div>
-
-    </div>
-
-    <div class="confidence">
-
-      <div class="confidence-label">
-        <span>Confidence</span>
-        <span id="confidenceText">—</span>
-      </div>
-
-      <div class="confidence-bar">
-        <div id="confidenceFill" class="confidence-fill"></div>
-      </div>
-
-    </div>
-
-    <div class="small" style="margin-top:10px;">
-      Fonte xG:
-      <strong id="xgSource">—</strong>
-    </div>
-
-  </section>
-
-  <section class="section card">
-
-    <div class="tabs">
-
-      <button class="tab active" data-tab="markets">
-        Mercati
-      </button>
-
-      <button class="tab" data-tab="scores">
-        Risultati esatti
-      </button>
-
-      <button class="tab" data-tab="lineups">
-        Lineups
-      </button>
-
-      <button class="tab" data-tab="standings">
-        Classifica
-      </button>
-
-      <button class="tab" data-tab="debug">
-        Debug
-      </button>
-
-    </div>
-
-    <div id="tab-markets" class="tab-content active">
-      <div id="markets" class="market-grid">
+      <div id="standingsContainer">
         <div class="empty">
-          Premi "Prevedi" per calcolare i mercati.
+          Nessun dato disponibile.
         </div>
       </div>
-    </div>
 
-    <div id="tab-scores" class="tab-content">
-      <div id="scores" class="score-list">
+    </section>
+
+    <!-- MATCHES -->
+    <section class="card span-6">
+
+      <h2>Partite sincronizzate</h2>
+
+      <div id="matchesContainer">
         <div class="empty">
-          Nessun risultato esatto.
+          Nessun dato disponibile.
         </div>
       </div>
-    </div>
 
-    <div id="tab-lineups" class="tab-content">
-      <div id="lineups" class="empty">
-        Nessuna formazione caricata.
-      </div>
-    </div>
+    </section>
 
-    <div id="tab-standings" class="tab-content">
-      <div id="standings" class="empty">
-        Classifica non disponibile.
-      </div>
-    </div>
+    <!-- LINEUPS -->
+    <section class="card span-6">
 
-    <div id="tab-debug" class="tab-content">
-      <div class="small">
-        Diagnostica.
+      <h2>Lineup</h2>
+
+      <div id="lineupsContainer">
+        <div class="empty">
+          Nessun lineup disponibile.
+        </div>
       </div>
 
-      <pre id="debug" class="json-box">Nessun dato.</pre>
-    </div>
+    </section>
 
-  </section>
+    <!-- DEBUG -->
+    <section class="card span-6">
 
-</main>
+      <h2>Debug</h2>
+
+      <pre id="debug" class="debug">Nessun debug disponibile.</pre>
+
+    </section>
+
+  </main>
+
+  <div class="footer">
+    Serie A Predictor V5 · Poisson + Dixon-Coles
+  </div>
+
+</div>
 
 <script>
 "use strict";
 
 /* =========================================================
-   STATE
+   STATO APP
 ========================================================= */
 
 const state = {
@@ -619,8 +697,9 @@ const state = {
   prediction: null
 };
 
+
 /* =========================================================
-   TEAMS
+   SQUADRE SERIE A
 ========================================================= */
 
 const serieATeams = [
@@ -628,6 +707,7 @@ const serieATeams = [
   "Bologna",
   "Cagliari",
   "Como",
+  "Empoli",
   "Fiorentina",
   "Frosinone",
   "Genoa",
@@ -646,238 +726,691 @@ const serieATeams = [
   "Venezia"
 ];
 
+
 /* =========================================================
-   HELPERS
+   ALIAS BBD -> FRONTEND
 ========================================================= */
 
-function el(id) {
-  return document.getElementById(id);
+const aliases = {
+  "inter milan": "inter",
+  "internazionale": "inter",
+  "como 1907": "como",
+  "as roma": "roma",
+  "ac milan": "milan",
+  "venezia fc": "venezia"
+};
+
+
+/* =========================================================
+   UTILITY
+========================================================= */
+
+function normalizeTeamName(name) {
+  if (!name) return "";
+
+  const clean = String(name)
+    .trim()
+    .toLowerCase();
+
+  return aliases[clean] || clean;
 }
+
 
 function escapeHtml(value) {
   return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function number(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
 
-function formatPercent(value) {
-  const n = number(value);
+/*
+ * Timeout frontend.
+ *
+ * Evita che una chiamata API rimanga appesa
+ * indefinitamente nel browser.
+ */
+async function fetchWithTimeout(
+  url,
+  options = {},
+  timeoutMs = 15000
+) {
+  const controller = new AbortController();
 
-  if (n === null) return "—";
-
-  return `${(n * 100).toFixed(1)}%`;
-}
-
-function formatOdd(value) {
-  const n = number(value);
-
-  if (n === null || n <= 0) return "—";
-
-  return n.toFixed(2);
-}
-
-function setStatus(message, type = "") {
-  const node = el("status");
-
-  node.textContent = message;
-  node.className = `status ${type}`;
-}
-
-function normalize(value) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function canonicalTeamName(value) {
-  const name = normalize(value);
-
-  const aliases = {
-    "inter milan": "inter",
-    "internazionale": "inter",
-    "inter": "inter",
-
-    "como 1907": "como",
-    "como": "como",
-
-    "as roma": "roma",
-    "roma": "roma",
-
-    "ac milan": "milan",
-    "milan": "milan",
-
-    "venezia fc": "venezia",
-    "venezia": "venezia"
-  };
-
-  return aliases[name] || name;
-}
-
-function sameTeam(a, b) {
-  const x = canonicalTeamName(a);
-  const y = canonicalTeamName(b);
-
-  return x && y && x === y;
-}
-
-function getTeamName(value) {
-  if (!value) return "";
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  return (
-    value.name ||
-    value.team_name ||
-    value.teamName ||
-    value.short_name ||
-    ""
-  );
-}
-
-/* =========================================================
-   SELECTS
-========================================================= */
-
-function populateTeams() {
-  const home = el("homeTeam");
-  const away = el("awayTeam");
-
-  home.innerHTML = "";
-  away.innerHTML = "";
-
-  serieATeams.forEach(team => {
-    home.add(new Option(team, team));
-    away.add(new Option(team, team));
-  });
-
-  home.value = "Inter";
-  away.value = "Milan";
-}
-
-/* =========================================================
-   BBD MATCH NORMALIZATION
-========================================================= */
-
-function normalizeMatch(raw) {
-  if (!raw) return null;
-
-  return {
-    id: raw.id || raw.match_id || raw.matchId || null,
-
-    homeTeam: getTeamName(raw.home),
-    awayTeam: getTeamName(raw.away),
-
-    kickoff:
-      raw.kickoff_utc ||
-      raw.kickoff ||
-      raw.start_time ||
-      null,
-
-    status: raw.status || null,
-
-    score: raw.score || null,
-
-    raw
-  };
-}
-
-function findMatch(home, away) {
-  const list = state.matches
-    .map(normalizeMatch)
-    .filter(Boolean);
-
-  return (
-    list.find(match =>
-      sameTeam(match.homeTeam, home) &&
-      sameTeam(match.awayTeam, away)
-    ) || null
-  );
-}
-
-/* =========================================================
-   API JSON
-========================================================= */
-
-async function readJson(response) {
-  const text = await response.text();
-
-  let data;
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
 
   try {
-    data = JSON.parse(text);
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+
+  } catch (error) {
+
+    if (error?.name === "AbortError") {
+      throw new Error(
+        `Richiesta scaduta dopo ${Math.round(timeoutMs / 1000)} secondi.`
+      );
+    }
+
+    throw error;
+
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+
+/*
+ * Legge sempre il body come testo prima di fare JSON.parse.
+ *
+ * Così se Vercel restituisce HTML, un errore 500,
+ * una pagina di errore o una risposta vuota,
+ * mostriamo un messaggio comprensibile.
+ */
+async function readJson(response) {
+
+  const text = await response.text();
+
+  let data = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
   } catch {
     throw new Error(
-      `Risposta non JSON dal server (${response.status}): ${text.slice(0, 300)}`
+      `Risposta non JSON dal server (${response.status}).`
     );
   }
 
   if (!response.ok) {
-    throw new Error(
-      data?.error ||
+
+    const message =
       data?.message ||
-      `HTTP ${response.status}`
-    );
+      data?.error ||
+      `Errore HTTP ${response.status}.`;
+
+    throw new Error(message);
+  }
+
+  if (!data) {
+    throw new Error("Il server ha restituito una risposta vuota.");
   }
 
   return data;
 }
 
+
+function setStatus(message, type = "") {
+
+  const el = document.getElementById("status");
+
+  if (!el) return;
+
+  el.className = `status ${type}`;
+
+  el.innerHTML = escapeHtml(message);
+}
+
+
+function setLoadingStatus(message) {
+
+  const el = document.getElementById("status");
+
+  if (!el) return;
+
+  el.className = "status";
+
+  el.innerHTML = `
+    <span class="loading">
+      <span class="spinner"></span>
+      ${escapeHtml(message)}
+    </span>
+  `;
+}
+
+
 /* =========================================================
-   SYNC
+   NORMALIZZAZIONE MATCH BBD
+========================================================= */
+
+function getTeamName(team) {
+
+  if (!team) return "";
+
+  if (typeof team === "string") {
+    return team;
+  }
+
+  return (
+    team.name ||
+    team.team_name ||
+    team.display_name ||
+    team.short_name ||
+    team.title ||
+    ""
+  );
+}
+
+
+function normalizeMatch(raw) {
+
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  return {
+    id:
+      raw.id ??
+      raw.match_id ??
+      raw.matchId ??
+      null,
+
+    homeTeam: getTeamName(raw.home),
+
+    awayTeam: getTeamName(raw.away),
+
+    kickoff:
+      raw.kickoff_utc ??
+      raw.kickoff ??
+      raw.start_time ??
+      raw.startTime ??
+      null,
+
+    status:
+      raw.status ??
+      raw.state ??
+      null,
+
+    score:
+      raw.score ??
+      raw.result ??
+      null,
+
+    xG:
+      raw.xG ??
+      raw.xg ??
+      raw.expected_goals ??
+      null,
+
+    raw
+  };
+}
+
+
+function getNormalizedMatches() {
+
+  return state.matches
+    .map(normalizeMatch)
+    .filter(Boolean);
+}
+
+
+/* =========================================================
+   CERCA PARTITA
+========================================================= */
+
+function findMatch(homeTeam, awayTeam) {
+
+  const home = normalizeTeamName(homeTeam);
+  const away = normalizeTeamName(awayTeam);
+
+  return getNormalizedMatches().find(match => {
+
+    const matchHome =
+      normalizeTeamName(match.homeTeam);
+
+    const matchAway =
+      normalizeTeamName(match.awayTeam);
+
+    return (
+      matchHome === home &&
+      matchAway === away
+    );
+
+  }) || null;
+}
+
+
+/* =========================================================
+   POPOLAMENTO SELECT
+========================================================= */
+
+function populateTeams() {
+
+  const homeSelect =
+    document.getElementById("homeTeam");
+
+  const awaySelect =
+    document.getElementById("awayTeam");
+
+  if (!homeSelect || !awaySelect) return;
+
+  homeSelect.innerHTML = "";
+  awaySelect.innerHTML = "";
+
+  serieATeams.forEach(team => {
+
+    const optionHome =
+      document.createElement("option");
+
+    optionHome.value = team;
+    optionHome.textContent = team;
+
+    homeSelect.appendChild(optionHome);
+
+
+    const optionAway =
+      document.createElement("option");
+
+    optionAway.value = team;
+    optionAway.textContent = team;
+
+    awaySelect.appendChild(optionAway);
+
+  });
+
+  /*
+   * Default sensato.
+   */
+  if (serieATeams.includes("Inter")) {
+    homeSelect.value = "Inter";
+  }
+
+  if (serieATeams.includes("Juventus")) {
+    awaySelect.value = "Juventus";
+  }
+
+  /*
+   * Evita casa = trasferta.
+   */
+  if (homeSelect.value === awaySelect.value) {
+
+    const alternative =
+      serieATeams.find(
+        team => team !== homeSelect.value
+      );
+
+    if (alternative) {
+      awaySelect.value = alternative;
+    }
+  }
+}
+
+
+/* =========================================================
+   TABS
+========================================================= */
+
+function setupTabs() {
+
+  const tabs =
+    document.querySelectorAll(".tab");
+
+  tabs.forEach(tab => {
+
+    tab.addEventListener("click", () => {
+
+      const target =
+        tab.dataset.tab;
+
+      document
+        .querySelectorAll(".tab")
+        .forEach(item => {
+          item.classList.remove("active");
+        });
+
+      document
+        .querySelectorAll(".tab-panel")
+        .forEach(panel => {
+          panel.classList.remove("active");
+        });
+
+      tab.classList.add("active");
+
+      const panel =
+        document.getElementById(`tab-${target}`);
+
+      if (panel) {
+        panel.classList.add("active");
+      }
+    });
+
+  });
+}
+
+
+/* =========================================================
+   RENDER COVERAGE
+========================================================= */
+
+function renderCoverage() {
+
+  const coverage =
+    state.syncData?.coverage || {};
+
+  document.getElementById("coverageMatches").textContent =
+    coverage.matches ?? state.matches.length ?? 0;
+
+  document.getElementById("coverageXG").textContent =
+    coverage.xG ?? 0;
+
+  document.getElementById("coverageTeamsXG").textContent =
+    coverage.teamsWithXG ?? 0;
+
+  document.getElementById("coverageLineups").textContent =
+    coverage.lineups ?? 0;
+}
+
+
+/* =========================================================
+   RENDER CLASSIFICA
+========================================================= */
+
+function renderStandings() {
+
+  const container =
+    document.getElementById("standingsContainer");
+
+  if (!container) return;
+
+  const standings =
+    Array.isArray(state.standings)
+      ? state.standings
+      : [];
+
+  if (!standings.length) {
+
+    container.innerHTML = `
+      <div class="empty">
+        Nessuna classifica disponibile da BBD.
+      </div>
+    `;
+
+    return;
+  }
+
+  const rows =
+    standings.slice(0, 20);
+
+  let html = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Squadra</th>
+            <th>PG</th>
+            <th>PT</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  rows.forEach((row, index) => {
+
+    const position =
+      row.position ??
+      row.rank ??
+      row.place ??
+      index + 1;
+
+    const team =
+      row.team?.name ??
+      row.team_name ??
+      row.name ??
+      row.club ??
+      "—";
+
+    const played =
+      row.played ??
+      row.games ??
+      row.matches_played ??
+      "—";
+
+    const points =
+      row.points ??
+      row.pts ??
+      "—";
+
+    html += `
+      <tr>
+        <td>${escapeHtml(position)}</td>
+        <td>${escapeHtml(team)}</td>
+        <td>${escapeHtml(played)}</td>
+        <td>${escapeHtml(points)}</td>
+      </tr>
+    `;
+  });
+
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  container.innerHTML = html;
+}
+
+
+/* =========================================================
+   RENDER MATCHES
+========================================================= */
+
+function renderMatches() {
+
+  const container =
+    document.getElementById("matchesContainer");
+
+  if (!container) return;
+
+  const matches =
+    getNormalizedMatches();
+
+  if (!matches.length) {
+
+    container.innerHTML = `
+      <div class="empty">
+        Nessuna partita disponibile.
+      </div>
+    `;
+
+    return;
+  }
+
+  const rows =
+    matches.slice(0, 20);
+
+  let html = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Casa</th>
+            <th>Trasferta</th>
+            <th>Data</th>
+            <th>Stato</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  rows.forEach(match => {
+
+    let kickoff = "—";
+
+    if (match.kickoff) {
+
+      const date =
+        new Date(match.kickoff);
+
+      if (!Number.isNaN(date.getTime())) {
+        kickoff =
+          date.toLocaleString("it-IT", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit"
+          });
+      }
+    }
+
+    html += `
+      <tr>
+        <td>${escapeHtml(match.homeTeam || "—")}</td>
+        <td>${escapeHtml(match.awayTeam || "—")}</td>
+        <td>${escapeHtml(kickoff)}</td>
+        <td>${escapeHtml(match.status || "—")}</td>
+      </tr>
+    `;
+  });
+
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  container.innerHTML = html;
+}
+
+
+/* =========================================================
+   RENDER LINEUPS
+========================================================= */
+
+function renderLineups() {
+
+  const container =
+    document.getElementById("lineupsContainer");
+
+  if (!container) return;
+
+  const lineups =
+    Array.isArray(state.lineups)
+      ? state.lineups
+      : [];
+
+  if (!lineups.length) {
+
+    container.innerHTML = `
+      <div class="empty">
+        Nessun lineup disponibile da BBD.
+      </div>
+    `;
+
+    return;
+  }
+
+  let html = "";
+
+  lineups.slice(0, 10).forEach(item => {
+
+    const matchId =
+      item.matchId ??
+      item.match_id ??
+      item.id ??
+      "—";
+
+    html += `
+      <div style="
+        padding:12px;
+        border-bottom:1px solid var(--border);
+      ">
+        <strong>Match ${escapeHtml(matchId)}</strong>
+
+        <pre class="debug" style="margin-top:8px;">
+${escapeHtml(JSON.stringify(item.data ?? item, null, 2))}
+        </pre>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+
+/* =========================================================
+   RENDER DEBUG
+========================================================= */
+
+function renderDebug() {
+
+  const debug =
+    document.getElementById("debug");
+
+  if (!debug) return;
+
+  debug.textContent =
+    JSON.stringify(
+      {
+        sync: state.syncData,
+        prediction: state.prediction
+      },
+      null,
+      2
+    );
+}
+
+
+/* =========================================================
+   SYNC BBD
 ========================================================= */
 
 async function syncData() {
-  const button = el("syncBtn");
 
-  button.disabled = true;
+  const button =
+    document.getElementById("syncBtn");
 
-  setStatus(
-    "Connessione a Big Balls Sports Data...",
-    ""
+  if (button) {
+    button.disabled = true;
+    button.textContent = "⏳ Sincronizzazione...";
+  }
+
+  setLoadingStatus(
+    "Connessione a Big Balls Sports Data..."
   );
 
   try {
-    const response = await fetch(
-      `/api/sync?ts=${Date.now()}`,
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          "Accept": "application/json"
-        }
-      }
-    );
 
-    const data = await readJson(response);
+    const response =
+      await fetchWithTimeout(
+        `/api/sync?ts=${Date.now()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            "Accept": "application/json"
+          }
+        },
+        15000
+      );
+
+    const data =
+      await readJson(response);
 
     if (!data.ok) {
       throw new Error(
-        data.error || "Sync non riuscito"
+        data.message ||
+        data.error ||
+        "Sincronizzazione non riuscita."
       );
     }
 
     state.syncData = data;
 
-    state.matches = Array.isArray(data.matches)
-      ? data.matches
-      : [];
+    state.matches =
+      Array.isArray(data.matches)
+        ? data.matches
+        : [];
 
-    state.standings = Array.isArray(data.standings)
-      ? data.standings
-      : [];
+    state.standings =
+      Array.isArray(data.standings)
+        ? data.standings
+        : [];
 
     state.teamXG =
       data.teamXG &&
@@ -885,537 +1418,771 @@ async function syncData() {
         ? data.teamXG
         : {};
 
-    state.lineups = Array.isArray(data.lineups)
-      ? data.lineups
-      : [];
+    state.lineups =
+      Array.isArray(data.lineups)
+        ? data.lineups
+        : [];
 
-    updateCoverage();
-
-    el("debug").textContent =
-      JSON.stringify(data, null, 2);
-
+    renderCoverage();
     renderStandings();
+    renderMatches();
+    renderLineups();
+    renderDebug();
+
+    const coverage =
+      data.coverage || {};
 
     setStatus(
-      `BBD OK · ${state.matches.length} match · ${
-        data.coverage?.xG ?? 0
-      } righe xG · ${
-        data.coverage?.teamsWithXG ?? 0
-      } squadre con xG`,
+      `BBD OK · ${coverage.matches ?? state.matches.length} partite caricate · xG ${coverage.xG ?? 0} · lineup ${coverage.lineups ?? 0}.`,
       "ok"
     );
 
-    await predict();
+    /*
+     * IMPORTANTE:
+     * qui NON lanciamo automaticamente predict().
+     *
+     * Prima sincronizziamo.
+     * Poi l'utente preme "Calcola previsione".
+     *
+     * Questo evita che un eventuale problema di /api/predict
+     * faccia sembrare fallita la sincronizzazione.
+     */
 
   } catch (error) {
-    console.error(error);
+
+    console.error("Sync error:", error);
 
     setStatus(
-      `Errore: ${error.message}`,
+      `Errore sincronizzazione: ${error?.message || "Errore sconosciuto."}`,
       "error"
     );
 
-    el("debug").textContent =
-      String(error.stack || error.message);
   } finally {
-    button.disabled = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "🔄 Sincronizza BBD";
+    }
   }
 }
 
-/* =========================================================
-   COVERAGE
-========================================================= */
-
-function updateCoverage() {
-  const coverage = state.syncData?.coverage || {};
-
-  el("coverageMatches").textContent =
-    coverage.matches ?? state.matches.length;
-
-  el("coverageXG").textContent =
-    coverage.xG ?? 0;
-
-  el("coverageLineups").textContent =
-    coverage.lineups ?? state.lineups.length;
-
-  el("coverageStandings").textContent =
-    state.standings.length;
-}
 
 /* =========================================================
-   PREDICT
+   PREDIZIONE
 ========================================================= */
 
 async function predict() {
-  const home = el("homeTeam").value;
-  const away = el("awayTeam").value;
-  const competition = el("competition").value;
 
-  if (!home || !away) return;
+  const homeTeam =
+    document.getElementById("homeTeam")?.value || "";
 
-  if (sameTeam(home, away)) {
+  const awayTeam =
+    document.getElementById("awayTeam")?.value || "";
+
+  const competition =
+    document.getElementById("competition")?.value ||
+    "seriea";
+
+  if (!homeTeam || !awayTeam) {
+
     setStatus(
-      "Casa e trasferta devono essere squadre diverse.",
+      "Seleziona entrambe le squadre.",
       "error"
     );
+
     return;
   }
 
-  const match = findMatch(home, away);
+  if (homeTeam === awayTeam) {
 
-  const payload = {
-    homeTeam: home,
-    awayTeam: away,
-    competition,
-    match: match?.raw || null
-  };
+    setStatus(
+      "La squadra di casa e quella ospite devono essere diverse.",
+      "error"
+    );
 
-  /*
-   * Passiamo anche i dati xG aggregati al backend.
-   * Questo permette a predict.js di usarli se previsto
-   * dalla sua implementazione.
-   */
-
-  const homeXGEntry =
-    Object.values(state.teamXG)
-      .find(item => sameTeam(item?.team, home));
-
-  const awayXGEntry =
-    Object.values(state.teamXG)
-      .find(item => sameTeam(item?.team, away));
-
-  if (homeXGEntry || awayXGEntry) {
-    payload.teamXG = {
-      home: homeXGEntry || null,
-      away: awayXGEntry || null
-    };
+    return;
   }
 
-  setStatus(
-    "Calcolo previsione...",
-    ""
+  const button =
+    document.getElementById("predictBtn");
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "⏳ Calcolo...";
+  }
+
+  setLoadingStatus(
+    "Calcolo della previsione..."
   );
 
   try {
-    const response = await fetch(
-      "/api/predict",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(payload)
-      }
-    );
 
-    const data = await readJson(response);
+    const match =
+      findMatch(homeTeam, awayTeam);
+
+    /*
+     * Creiamo un payload leggero.
+     *
+     * Non mandiamo tutto l'oggetto raw completo:
+     * evita richieste inutilmente grandi al backend.
+     */
+
+    const payload = {
+      homeTeam,
+      awayTeam,
+      competition
+    };
+
+
+    /*
+     * Se BBD ha già fornito xG nella partita,
+     * lo passiamo al modello.
+     */
+
+    if (match?.xG) {
+
+      payload.match = {
+        id: match.id,
+        homeTeam: match.homeTeam,
+        awayTeam: match.awayTeam,
+        kickoff: match.kickoff,
+        status: match.status,
+        xG: match.xG
+      };
+    }
+
+    /*
+     * Se abbiamo teamXG dal sync,
+     * lo usiamo come fallback API.
+     */
+
+    const homeKey =
+      normalizeTeamName(homeTeam);
+
+    const awayKey =
+      normalizeTeamName(awayTeam);
+
+    const homeXG =
+      state.teamXG?.[homeKey] ??
+      state.teamXG?.[homeTeam] ??
+      null;
+
+    const awayXG =
+      state.teamXG?.[awayKey] ??
+      state.teamXG?.[awayTeam] ??
+      null;
+
+    if (
+      Number.isFinite(Number(homeXG)) &&
+      Number.isFinite(Number(awayXG))
+    ) {
+
+      payload.homeXG =
+        Number(homeXG);
+
+      payload.awayXG =
+        Number(awayXG);
+    }
+
+
+    const response =
+      await fetchWithTimeout(
+        "/api/predict",
+        {
+          method: "POST",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify(payload)
+        },
+        10000
+      );
+
+    const data =
+      await readJson(response);
 
     if (!data.ok) {
       throw new Error(
-        data.error || "Previsione non disponibile"
+        data.message ||
+        data.error ||
+        "Previsione non riuscita."
       );
     }
 
     state.prediction = data;
 
-    renderPrediction(data, match);
+    renderPrediction(data);
+    renderDebug();
 
     setStatus(
-      match
-        ? `Previsione aggiornata · ${home} - ${away}`
-        : `Previsione aggiornata · dati partita non presenti nel feed BBD`,
+      `Previsione calcolata · ${homeTeam} vs ${awayTeam}.`,
       "ok"
     );
 
   } catch (error) {
-    console.error(error);
+
+    console.error("Predict error:", error);
 
     setStatus(
-      `Errore previsione: ${error.message}`,
+      `Errore previsione: ${error?.message || "Errore sconosciuto."}`,
       "error"
     );
+
+  } finally {
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "🎯 Calcola previsione";
+    }
   }
 }
 
+
 /* =========================================================
-   RENDER PREDICTION
+   FORMAT PERCENTUALE
 ========================================================= */
 
-function renderPrediction(data, match) {
-  const home =
-    data.match?.homeTeam ||
-    data.homeTeam ||
-    el("homeTeam").value;
+function formatPercent(value) {
 
-  const away =
-    data.match?.awayTeam ||
-    data.awayTeam ||
-    el("awayTeam").value;
+  const number =
+    Number(value);
 
-  el("matchTitle").innerHTML =
-    `${escapeHtml(home)}
-     <span class="vs">vs</span>
-     ${escapeHtml(away)}`;
-
-  el("modelBadge").textContent =
-    `${data.model?.name || "Poisson + Dixon-Coles"}
-     · ${data.model?.competition || el("competition").value}`;
-
-  el("homeXG").textContent =
-    data.expectedGoals?.home ??
-    data.xg?.home ??
-    "—";
-
-  el("awayXG").textContent =
-    data.expectedGoals?.away ??
-    data.xg?.away ??
-    "—";
-
-  el("xgSource").textContent =
-    data.xgSource ||
-    "BBD / modello";
-
-  const confidence =
-    number(data.confidence);
-
-  if (confidence !== null) {
-    el("confidenceText").textContent =
-      `${confidence}%`;
-
-    el("confidenceFill").style.width =
-      `${Math.max(0, Math.min(100, confidence))}%`;
-  } else {
-    el("confidenceText").textContent = "—";
-    el("confidenceFill").style.width = "0%";
+  if (!Number.isFinite(number)) {
+    return "—";
   }
+
+  return `${(number * 100).toFixed(1)}%`;
+}
+
+
+/* =========================================================
+   FORMAT QUOTA
+========================================================= */
+
+function formatOdds(value) {
+
+  const number =
+    Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "—";
+  }
+
+  return number.toFixed(2);
+}
+
+
+/* =========================================================
+   RENDER PREDIZIONE
+========================================================= */
+
+function renderPrediction(data) {
+
+  document.getElementById("predictionEmpty").style.display =
+    "none";
+
+  document.getElementById("predictionContent").style.display =
+    "block";
+
+
+  document.getElementById("predictionHome").textContent =
+    data.match?.homeTeam || "—";
+
+  document.getElementById("predictionAway").textContent =
+    data.match?.awayTeam || "—";
+
+
+  document.getElementById("predictionSource").textContent =
+    `Fonte xG: ${data.xgSource || "Fallback model"} · ` +
+    `xG input ${data.inputXG?.home ?? "—"} - ${data.inputXG?.away ?? "—"} · ` +
+    `Goal attesi ${data.expectedGoals?.home ?? "—"} - ${data.expectedGoals?.away ?? "—"}`;
+
+
+  document.getElementById("confidence").textContent =
+    `Confidence: ${data.confidence ?? "—"}%`;
+
 
   renderMarkets(data);
   renderScores(data);
-  renderLineups(match);
+  renderFairOdds(data);
 }
 
+
 /* =========================================================
-   MARKETS
+   RENDER MERCATI
 ========================================================= */
 
 function renderMarkets(data) {
-  const p = data.probabilities || {};
-  const odds = data.fairOdds || {};
 
-  const items = [
-    ["1 · Casa", p.homeWin, odds["1"]],
-    ["X · Pareggio", p.draw, odds["X"]],
-    ["2 · Trasferta", p.awayWin, odds["2"]],
+  const container =
+    document.getElementById("markets");
 
-    ["1X", p.doubleChance?.["1X"], odds["1X"]],
-    ["X2", p.doubleChance?.["X2"], odds["X2"]],
-    ["12", p.doubleChance?.["12"], odds["12"]],
+  const p =
+    data.probabilities || {};
 
-    ["Over 1.5", p.overUnder?.["over1.5"], odds["Over 1.5"]],
-    ["Under 1.5", p.overUnder?.["under1.5"], odds["Under 1.5"]],
+  const items = [];
 
-    ["Over 2.5", p.overUnder?.["over2.5"], odds["Over 2.5"]],
-    ["Under 2.5", p.overUnder?.["under2.5"], odds["Under 2.5"]],
 
-    ["Over 3.5", p.overUnder?.["over3.5"], odds["Over 3.5"]],
-    ["Under 3.5", p.overUnder?.["under3.5"], odds["Under 3.5"]],
+  /*
+   * 1X2
+   */
 
-    ["BTTS Yes", p.btts?.yes, odds["BTTS Yes"]],
-    ["BTTS No", p.btts?.no, odds["BTTS No"]]
+  if (p.homeWin != null) {
+
+    items.push({
+      title: "1 · Casa",
+      value: formatPercent(p.homeWin),
+      sub: "Vittoria casa"
+    });
+  }
+
+  if (p.draw != null) {
+
+    items.push({
+      title: "X · Pareggio",
+      value: formatPercent(p.draw),
+      sub: "Pareggio"
+    });
+  }
+
+  if (p.awayWin != null) {
+
+    items.push({
+      title: "2 · Trasferta",
+      value: formatPercent(p.awayWin),
+      sub: "Vittoria trasferta"
+    });
+  }
+
+
+  /*
+   * Doppia chance
+   */
+
+  if (p.homeOrDraw != null) {
+
+    items.push({
+      title: "1X",
+      value: formatPercent(p.homeOrDraw),
+      sub: "Casa o pareggio"
+    });
+  }
+
+  if (p.drawOrAway != null) {
+
+    items.push({
+      title: "X2",
+      value: formatPercent(p.drawOrAway),
+      sub: "Pareggio o trasferta"
+    });
+  }
+
+  if (p.homeOrAway != null) {
+
+    items.push({
+      title: "12",
+      value: formatPercent(p.homeOrAway),
+      sub: "Una delle due vince"
+    });
+  }
+
+
+  /*
+   * Over / Under
+   */
+
+  const overKeys = [
+    ["over15", "Over 1.5"],
+    ["over25", "Over 2.5"],
+    ["over35", "Over 3.5"],
+    ["under15", "Under 1.5"],
+    ["under25", "Under 2.5"],
+    ["under35", "Under 3.5"]
   ];
 
-  el("markets").innerHTML =
+  overKeys.forEach(([key, title]) => {
+
+    if (p[key] != null) {
+
+      items.push({
+        title,
+        value: formatPercent(p[key]),
+        sub: "Probabilità"
+      });
+    }
+  });
+
+
+  /*
+   * BTTS
+   */
+
+  if (p.bttsYes != null) {
+
+    items.push({
+      title: "BTTS Sì",
+      value: formatPercent(p.bttsYes),
+      sub: "Entrambe segnano"
+    });
+  }
+
+  if (p.bttsNo != null) {
+
+    items.push({
+      title: "BTTS No",
+      value: formatPercent(p.bttsNo),
+      sub: "Almeno una non segna"
+    });
+  }
+
+
+  if (!items.length) {
+
+    container.innerHTML = `
+      <div class="empty">
+        Nessun mercato disponibile.
+      </div>
+    `;
+
+    return;
+  }
+
+
+  container.innerHTML =
     items.map(item => `
       <div class="market">
-        <div class="market-name">
-          ${escapeHtml(item[0])}
+        <div class="market-title">
+          ${escapeHtml(item.title)}
         </div>
 
-        <div class="market-prob">
-          ${formatPercent(item[1])}
+        <div class="market-value">
+          ${escapeHtml(item.value)}
         </div>
 
-        <div class="market-odd">
-          Fair odds: ${formatOdd(item[2])}
+        <div class="market-sub">
+          ${escapeHtml(item.sub)}
         </div>
       </div>
     `).join("");
 }
 
+
 /* =========================================================
-   SCORES
+   RENDER RISULTATI ESATTI
 ========================================================= */
 
 function renderScores(data) {
-  const scores = Array.isArray(data.exactScores)
-    ? data.exactScores
-    : [];
+
+  const container =
+    document.getElementById("scores");
+
+  const scores =
+    Array.isArray(data.exactScores)
+      ? data.exactScores
+      : [];
 
   if (!scores.length) {
-    el("scores").innerHTML =
-      `<div class="empty">
+
+    container.innerHTML = `
+      <div class="empty">
         Nessun risultato esatto disponibile.
-      </div>`;
+      </div>
+    `;
+
     return;
   }
 
-  const max = Math.max(
-    ...scores.map(x => number(x.probability) || 0)
-  );
+  container.innerHTML =
+    scores.slice(0, 10).map(score => {
 
-  el("scores").innerHTML =
-    scores.map(item => {
+      const home =
+        score.home ??
+        score.homeGoals ??
+        score.home_goals ??
+        0;
+
+      const away =
+        score.away ??
+        score.awayGoals ??
+        score.away_goals ??
+        0;
+
       const probability =
-        number(item.probability) || 0;
-
-      const width =
-        max > 0
-          ? probability / max * 100
-          : 0;
+        score.probability ??
+        score.prob ??
+        score.p ??
+        0;
 
       return `
-        <div class="score-row">
-          <div class="score">
-            ${escapeHtml(item.score)}
-          </div>
-
-          <div class="score-bar">
-            <div
-              class="score-fill"
-              style="width:${width}%"
-            ></div>
-          </div>
-
-          <div class="score-percent">
-            ${formatPercent(probability)}
-          </div>
+        <div class="score">
+          <strong>${escapeHtml(home)} - ${escapeHtml(away)}</strong>
+          <small>${formatPercent(probability)}</small>
         </div>
       `;
+
     }).join("");
 }
 
-/* =========================================================
-   LINEUPS
-========================================================= */
-
-function renderLineups(match) {
-  const container = el("lineups");
-
-  const matchId = match?.id;
-
-  let data = null;
-
-  if (matchId) {
-    const item =
-      state.lineups.find(
-        x => x.matchId === matchId
-      );
-
-    data = item?.data || null;
-  }
-
-  if (!data) {
-    container.className = "empty";
-    container.textContent =
-      "Nessuna formazione disponibile per questa partita.";
-    return;
-  }
-
-  container.className = "";
-
-  container.innerHTML = `
-    <div class="small">
-      Formazione ricevuta da BBD.
-    </div>
-
-    <pre class="json-box">${escapeHtml(
-      JSON.stringify(data, null, 2)
-    )}</pre>
-  `;
-}
 
 /* =========================================================
-   STANDINGS
+   RENDER QUOTE FAIR
 ========================================================= */
 
-function renderStandings() {
-  const container = el("standings");
+function renderFairOdds(data) {
 
-  if (!state.standings.length) {
-    container.className = "empty";
-    container.textContent =
-      "Classifica non disponibile da BBD.";
-    return;
-  }
+  const container =
+    document.getElementById("fairOdds");
 
-  container.className = "";
+  const odds =
+    data.fairOdds || {};
 
-  container.innerHTML = `
-    <div style="overflow:auto">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Squadra</th>
-            <th>Pt</th>
-            <th>PG</th>
-            <th>GF</th>
-            <th>GA</th>
-          </tr>
-        </thead>
+  const items = [];
 
-        <tbody>
-          ${state.standings.map((row, index) => {
-            const team =
-              getTeamName(row.team) ||
-              row.teamName ||
-              row.name ||
-              "—";
 
-            const position =
-              row.position ??
-              row.rank ??
-              index + 1;
+  Object.entries(odds)
+    .forEach(([key, value]) => {
 
-            const points =
-              row.points ??
-              row.pts ??
-              "—";
+      if (
+        value == null ||
+        !Number.isFinite(Number(value))
+      ) {
+        return;
+      }
 
-            const played =
-              row.played ??
-              row.matches ??
-              row.games ??
-              "—";
-
-            const gf =
-              row.goalsFor ??
-              row.gf ??
-              "—";
-
-            const ga =
-              row.goalsAgainst ??
-              row.ga ??
-              "—";
-
-            return `
-              <tr>
-                <td>${escapeHtml(position)}</td>
-                <td>${escapeHtml(team)}</td>
-                <td>${escapeHtml(points)}</td>
-                <td>${escapeHtml(played)}</td>
-                <td>${escapeHtml(gf)}</td>
-                <td>${escapeHtml(ga)}</td>
-              </tr>
-            `;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-/* =========================================================
-   TABS
-========================================================= */
-
-function setupTabs() {
-  document.querySelectorAll(".tab")
-    .forEach(button => {
-      button.addEventListener("click", () => {
-
-        document.querySelectorAll(".tab")
-          .forEach(x => x.classList.remove("active"));
-
-        document.querySelectorAll(".tab-content")
-          .forEach(x => x.classList.remove("active"));
-
-        button.classList.add("active");
-
-        const target =
-          el(`tab-${button.dataset.tab}`);
-
-        if (target) {
-          target.classList.add("active");
-        }
+      items.push({
+        title: key,
+        value: formatOdds(value)
       });
+
     });
+
+
+  if (!items.length) {
+
+    container.innerHTML = `
+      <div class="empty">
+        Nessuna quota fair disponibile.
+      </div>
+    `;
+
+    return;
+  }
+
+
+  container.innerHTML =
+    items.map(item => `
+      <div class="market">
+        <div class="market-title">
+          ${escapeHtml(item.title)}
+        </div>
+
+        <div class="market-value">
+          ${escapeHtml(item.value)}
+        </div>
+
+        <div class="market-sub">
+          Quota fair del modello
+        </div>
+      </div>
+    `).join("");
 }
 
+
 /* =========================================================
-   EVENTS
+   EVENTI
 ========================================================= */
 
 function setupEvents() {
 
-  el("syncBtn")
-    .addEventListener("click", syncData);
+  const syncBtn =
+    document.getElementById("syncBtn");
 
-  el("predictBtn")
-    .addEventListener("click", predict);
+  const predictBtn =
+    document.getElementById("predictBtn");
 
-  el("homeTeam")
-    .addEventListener("change", predict);
+  const homeTeam =
+    document.getElementById("homeTeam");
 
-  el("awayTeam")
-    .addEventListener("change", predict);
+  const awayTeam =
+    document.getElementById("awayTeam");
 
-  el("competition")
-    .addEventListener("change", predict);
+  const competition =
+    document.getElementById("competition");
+
+
+  if (syncBtn) {
+
+    syncBtn.addEventListener(
+      "click",
+      syncData
+    );
+  }
+
+
+  if (predictBtn) {
+
+    predictBtn.addEventListener(
+      "click",
+      predict
+    );
+  }
+
+
+  /*
+   * Al cambio squadra NON lanciamo più
+   * automaticamente la chiamata API.
+   *
+   * L'utente sceglie la partita e poi
+   * preme "Calcola previsione".
+   */
+
+  const selectionChanged = () => {
+
+    const home =
+      homeTeam?.value || "";
+
+    const away =
+      awayTeam?.value || "";
+
+    if (home === away && home) {
+
+      setStatus(
+        "Seleziona due squadre diverse.",
+        "error"
+      );
+
+      return;
+    }
+
+    setStatus(
+      "Partita selezionata. Premi «Calcola previsione»."
+    );
+  };
+
+
+  if (homeTeam) {
+    homeTeam.addEventListener(
+      "change",
+      selectionChanged
+    );
+  }
+
+  if (awayTeam) {
+    awayTeam.addEventListener(
+      "change",
+      selectionChanged
+    );
+  }
+
+  if (competition) {
+    competition.addEventListener(
+      "change",
+      selectionChanged
+    );
+  }
 }
 
+
 /* =========================================================
-   GLOBAL ERROR HANDLING
+   ERROR HANDLERS
 ========================================================= */
 
-window.addEventListener("error", event => {
-  console.error(event.error || event.message);
+window.addEventListener(
+  "error",
+  event => {
 
-  setStatus(
-    `Errore JavaScript: ${event.message}`,
-    "error"
-  );
-});
+    console.error(
+      "Global JS error:",
+      event.error || event.message
+    );
 
-window.addEventListener("unhandledrejection", event => {
-  console.error(event.reason);
+    const message =
+      event.error?.message ||
+      event.message ||
+      "Errore JavaScript.";
 
-  setStatus(
-    `Errore applicazione: ${
+    setStatus(
+      `Errore pagina: ${message}`,
+      "error"
+    );
+  }
+);
+
+
+window.addEventListener(
+  "unhandledrejection",
+  event => {
+
+    console.error(
+      "Unhandled promise rejection:",
+      event.reason
+    );
+
+    const message =
       event.reason?.message ||
-      String(event.reason)
-    }`,
-    "error"
-  );
-});
+      String(event.reason || "Errore asincrono.");
+
+    setStatus(
+      `Errore: ${message}`,
+      "error"
+    );
+  }
+);
+
 
 /* =========================================================
    INIT
 ========================================================= */
 
 function init() {
+
   try {
+
     populateTeams();
     setupTabs();
     setupEvents();
 
+    renderCoverage();
+    renderStandings();
+    renderMatches();
+    renderLineups();
+    renderDebug();
+
     setStatus(
-      "Pronto. Premi «Sincronizza BBD» per caricare i dati.",
-      ""
+      "Pronto. Premi «Sincronizza BBD» per caricare i dati."
     );
 
   } catch (error) {
-    console.error(error);
+
+    console.error(
+      "Init error:",
+      error
+    );
 
     setStatus(
-      `Errore inizializzazione: ${error.message}`,
+      `Errore inizializzazione: ${error?.message || "Errore sconosciuto."}`,
       "error"
     );
   }
 }
 
-init();
+
+/*
+ * Avvio solo dopo che l'HTML è pronto.
+ */
+if (document.readyState === "loading") {
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    init
+  );
+
+} else {
+
+  init();
+}
 </script>
 
 </body>
