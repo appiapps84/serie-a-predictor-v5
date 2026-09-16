@@ -186,103 +186,12 @@ function isFuture(match) {
  *
  * or nested stats/groups/items structures.
  */
-function findXGValues(node, depth = 0) {
-  if (node === null || node === undefined || depth > 12) {
-    return null;
-  }
 
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      const result = findXGValues(item, depth + 1);
-      if (result) return result;
-    }
-    return null;
-  }
 
-  if (typeof node !== "object") {
-    return null;
-  }
+ *
+ * or nested stats/groups/items structures.
+ */
 
-  const keys = Object.keys(node);
-  const lowerKeys = keys.map((k) => [k, normalizeText(k)]);
-
-  // Direct home/away xG fields
-  const homeKey = lowerKeys.find(([original, lower]) =>
-    /^(home|home_team|hometeam|home_side).*?(xg|expected.*goal)/i.test(
-      lower.replace(/\s+/g, "_")
-    )
-  );
-
-  const awayKey = lowerKeys.find(([original, lower]) =>
-    /^(away|away_team|awayteam|away_side).*?(xg|expected.*goal)/i.test(
-      lower.replace(/\s+/g, "_")
-    )
-  );
-
-  if (homeKey && awayKey) {
-    const home = Number(node[homeKey[0]]);
-    const away = Number(node[awayKey[0]]);
-
-    if (
-      Number.isFinite(home) &&
-      Number.isFinite(away) &&
-      home >= 0 &&
-      away >= 0 &&
-      home <= 10 &&
-      away <= 10
-    ) {
-      return { home, away };
-    }
-  }
-
-  // Object like { home: 1.2, away: 0.8 }
-  const xgLikeKey = lowerKeys.find(
-    ([, lower]) =>
-      lower === "xg" ||
-      lower === "expected_goals" ||
-      lower === "expected_goals_xg" ||
-      lower.includes("expected goals")
-  );
-
-  if (xgLikeKey) {
-    const candidate = node[xgLikeKey[0]];
-
-    if (candidate && typeof candidate === "object") {
-      const home = Number(
-        candidate.home ??
-          candidate.home_xg ??
-          candidate.homeXG ??
-          candidate.home_expected_goals
-      );
-
-      const away = Number(
-        candidate.away ??
-          candidate.away_xg ??
-          candidate.awayXG ??
-          candidate.away_expected_goals
-      );
-
-      if (
-        Number.isFinite(home) &&
-        Number.isFinite(away) &&
-        home >= 0 &&
-        away >= 0 &&
-        home <= 10 &&
-        away <= 10
-      ) {
-        return { home, away };
-      }
-    }
-  }
-
-  // Search nested objects
-  for (const key of keys) {
-    const result = findXGValues(node[key], depth + 1);
-    if (result) return result;
-  }
-
-  return null;
-}
 
 function collectInterestingKeys(node, output = new Set(), depth = 0) {
   if (node === null || node === undefined || depth > 8) {
