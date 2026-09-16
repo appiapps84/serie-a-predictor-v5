@@ -7,13 +7,10 @@ const LEAGUE = "seriea";
 const MATCH_TIMEOUT = 8000;
 const OPTIONAL_TIMEOUT = 6000;
 
-const MAX_STATS_REQUESTS = 8;
+const MAX_STATS_REQUESTS = 1;
 const MAX_LINEUP_REQUESTS = 6;
 const STORED_MATCHES_LIMIT = 200;
 
-/**
- * Chiamata a Big Balls Data.
- */
 async function fetchBBS(path, timeoutMs = OPTIONAL_TIMEOUT) {
   if (!API_KEY) {
     return {
@@ -33,11 +30,13 @@ async function fetchBBS(path, timeoutMs = OPTIONAL_TIMEOUT) {
   try {
     const response = await fetch(`${BBS_BASE}${path}`, {
       method: "GET",
+
       headers: {
         Accept: "application/json",
         "X-API-Key": API_KEY,
         Authorization: `Bearer ${API_KEY}`
       },
+
       signal: controller.signal
     });
 
@@ -78,9 +77,6 @@ async function fetchBBS(path, timeoutMs = OPTIONAL_TIMEOUT) {
   }
 }
 
-/**
- * Estrae un array da diverse strutture JSON.
- */
 function extractArray(data, keys = []) {
   if (Array.isArray(data)) {
     return data;
@@ -111,9 +107,6 @@ function extractArray(data, keys = []) {
   return [];
 }
 
-/**
- * ID partita.
- */
 function getMatchId(match) {
   if (!match || typeof match !== "object") {
     return null;
@@ -129,9 +122,6 @@ function getMatchId(match) {
   );
 }
 
-/**
- * Nome squadra.
- */
 function getTeamName(team) {
   if (!team) {
     return "";
@@ -150,9 +140,6 @@ function getTeamName(team) {
   );
 }
 
-/**
- * Conversione numerica sicura.
- */
 function toNumber(value) {
   if (
     value === null ||
@@ -169,8 +156,8 @@ function toNumber(value) {
     : null;
 }
 
-/**
- * Ricerca ricorsiva degli xG.
+/*
+ * Parser xG molto ampio.
  */
 function extractXG(data) {
   if (!data) {
@@ -185,8 +172,10 @@ function extractXG(data) {
     /*
      * Caso:
      *
-     * home: { xg: 1.45 }
-     * away: { xg: 0.82 }
+     * {
+     *   home: { xg: 1.5 },
+     *   away: { xg: 0.8 }
+     * }
      */
     const homeObject =
       obj.home ??
@@ -222,9 +211,7 @@ function extractXG(data) {
 
       if (
         homeXG !== null &&
-        awayXG !== null &&
-        homeXG >= 0 &&
-        awayXG >= 0
+        awayXG !== null
       ) {
         return {
           homeXG,
@@ -238,8 +225,6 @@ function extractXG(data) {
      *
      * home_xg
      * away_xg
-     * homeXG
-     * awayXG
      */
     const homeCandidates = [
       obj.home_xg,
@@ -304,8 +289,8 @@ function extractXG(data) {
      * Caso:
      *
      * xg: {
-     *   home: 1.5,
-     *   away: 0.8
+     *   home: ...,
+     *   away: ...
      * }
      */
     const xgObject =
@@ -333,9 +318,7 @@ function extractXG(data) {
 
       if (
         home !== null &&
-        away !== null &&
-        home >= 0 &&
-        away >= 0
+        away !== null
       ) {
         return {
           homeXG: home,
@@ -345,35 +328,16 @@ function extractXG(data) {
     }
 
     /*
-     * Ricerca dentro contenitori.
+     * Cerca ricorsiva.
      */
-    const children = [
-      "data",
-      "stats",
-      "statistics",
-      "match_stats",
-      "matchStats",
-      "teams",
-      "team_stats",
-      "teamStats"
-    ];
+    for (const key of Object.keys(obj)) {
+      const value = obj[key];
 
-    for (const key of children) {
-      const child = obj[key];
-
-      if (Array.isArray(child)) {
-        for (const item of child) {
-          const result = search(item);
-
-          if (result) {
-            return result;
-          }
-        }
-      } else if (
-        child &&
-        typeof child === "object"
+      if (
+        value &&
+        typeof value === "object"
       ) {
-        const result = search(child);
+        const result = search(value);
 
         if (result) {
           return result;
@@ -387,9 +351,6 @@ function extractXG(data) {
   return search(data);
 }
 
-/**
- * Match correnti.
- */
 async function fetchCurrentMatches() {
   return fetchBBS(
     `/v1/matches?sport=${SPORT}&league=${LEAGUE}&limit=50`,
@@ -397,16 +358,6 @@ async function fetchCurrentMatches() {
   );
 }
 
-/**
- * Storico FINITO.
- *
- * Qui usiamo esplicitamente:
- *
- * status=finished
- * limit=200
- *
- * BBD documenta entrambi i parametri.
- */
 async function fetchFinishedMatches() {
   return fetchBBS(
     `/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&status=finished&limit=${STORED_MATCHES_LIMIT}`,
@@ -414,9 +365,6 @@ async function fetchFinishedMatches() {
   );
 }
 
-/**
- * Stats della partita.
- */
 async function fetchMatchStats(matchId) {
   if (!matchId) {
     return {
@@ -440,9 +388,6 @@ async function fetchMatchStats(matchId) {
   };
 }
 
-/**
- * Lineup.
- */
 async function fetchMatchLineup(matchId) {
   if (!matchId) {
     return {
@@ -458,9 +403,6 @@ async function fetchMatchLineup(matchId) {
   );
 }
 
-/**
- * Handler principale.
- */
 async function run(res) {
   const started = Date.now();
 
@@ -490,7 +432,12 @@ async function run(res) {
       successful: 0,
       withXG: 0,
       errors: 0,
-      rateLimited: false
+      rateLimited: false,
+
+      firstMatchId: null,
+      firstStatsStatus: null,
+      firstStatsResponse: null,
+      firstStatsParsedXG: null
     },
 
     lineups: {
@@ -501,9 +448,6 @@ async function run(res) {
     }
   };
 
-  /*
-   * API KEY
-   */
   if (!API_KEY) {
     return res.status(500).json({
       ok: false,
@@ -513,9 +457,9 @@ async function run(res) {
   }
 
   /*
-   * ================================================
-   * 1. MATCH FUTURI / CORRENTI
-   * ================================================
+   * ==========================================
+   * MATCH CORRENTI
+   * ==========================================
    */
 
   const matchesStarted = Date.now();
@@ -549,7 +493,6 @@ async function run(res) {
 
       diagnostics: {
         ...diagnostics,
-
         totalElapsedMs:
           Date.now() - started
       }
@@ -567,9 +510,9 @@ async function run(res) {
     );
 
   /*
-   * ================================================
-   * 2. STORICO FINITO
-   * ================================================
+   * ==========================================
+   * STORICO
+   * ==========================================
    */
 
   const storedStarted = Date.now();
@@ -603,9 +546,9 @@ async function run(res) {
     storedMatches.length;
 
   /*
-   * ================================================
-   * 3. STANDINGS
-   * ================================================
+   * ==========================================
+   * STANDINGS
+   * ==========================================
    */
 
   let standings = [];
@@ -640,9 +583,16 @@ async function run(res) {
   }
 
   /*
-   * ================================================
-   * 4. XG STORICI
-   * ================================================
+   * ==========================================
+   * XG
+   * ==========================================
+   *
+   * ATTENZIONE:
+   * In questa versione facciamo UNA SOLA
+   * richiesta stats.
+   *
+   * Serve per diagnosticare la struttura
+   * reale restituita da BBD.
    */
 
   const statsCandidates =
@@ -661,26 +611,32 @@ async function run(res) {
   const teamAccumulator = {};
 
   for (const match of statsCandidates) {
-    if (
-      diagnostics.stats.requested >=
-      MAX_STATS_REQUESTS
-    ) {
-      break;
-    }
-
     const matchId =
       getMatchId(match);
 
     diagnostics.stats.requested++;
     diagnostics.requests++;
 
+    diagnostics.stats.firstMatchId =
+      matchId;
+
     const statsResult =
       await fetchMatchStats(matchId);
 
+    diagnostics.stats.firstStatsStatus =
+      statsResult.status;
+
     /*
-     * Se BBD restituisce 429,
-     * smettiamo immediatamente.
+     * SALVIAMO LA RISPOSTA GREZZA.
+     *
+     * Questo è temporaneo.
      */
+    diagnostics.stats.firstStatsResponse =
+      statsResult.data;
+
+    diagnostics.stats.firstStatsParsedXG =
+      statsResult.xG;
+
     if (!statsResult.ok) {
       diagnostics.stats.errors++;
 
@@ -689,20 +645,15 @@ async function run(res) {
       ) {
         diagnostics.stats.rateLimited =
           true;
-
-        break;
       }
 
-      continue;
+      break;
     }
 
     diagnostics.stats.successful++;
 
-    /*
-     * Nessun xG per questa partita.
-     */
     if (!statsResult.xG) {
-      continue;
+      break;
     }
 
     diagnostics.stats.withXG++;
@@ -722,9 +673,6 @@ async function run(res) {
     const xg =
       statsResult.xG;
 
-    /*
-     * Salviamo xG della singola partita.
-     */
     matchXG.push({
       matchId,
 
@@ -745,12 +693,6 @@ async function run(res) {
       source:
         "BBD stored match stats"
     });
-
-    /*
-     * ============================================
-     * MEDIA XG SQUADRA
-     * ============================================
-     */
 
     const homeKey =
       homeTeam
@@ -792,7 +734,7 @@ async function run(res) {
   }
 
   /*
-   * Calcolo media xG per squadra.
+   * Media xG squadre.
    */
   const teamXG = {};
 
@@ -812,9 +754,9 @@ async function run(res) {
   }
 
   /*
-   * ================================================
-   * 5. LINEUPS
-   * ================================================
+   * ==========================================
+   * LINEUPS
+   * ==========================================
    */
 
   const lineupCandidates =
@@ -873,9 +815,9 @@ async function run(res) {
   }
 
   /*
-   * ================================================
-   * 6. COVERAGE
-   * ================================================
+   * ==========================================
+   * COVERAGE
+   * ==========================================
    */
 
   const coverage = {
@@ -899,9 +841,9 @@ async function run(res) {
   };
 
   /*
-   * ================================================
-   * 7. RISPOSTA
-   * ================================================
+   * ==========================================
+   * RISPOSTA
+   * ==========================================
    */
 
   return res.status(200).json({
@@ -937,9 +879,6 @@ async function run(res) {
   });
 }
 
-/**
- * Vercel Serverless Function.
- */
 export default async function handler(
   req,
   res
@@ -964,16 +903,10 @@ export default async function handler(
     "no-store"
   );
 
-  /*
-   * CORS.
-   */
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
-  /*
-   * Solo GET.
-   */
   if (req.method !== "GET") {
     return res.status(405).json({
       ok: false,
