@@ -1,0 +1,133 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    // Recupera predictions con risultati matchati
+    const { data: predictions } = await supabase
+      .from('predictions')
+      .select('*')
+      .order('predicted_at', { ascending: false });
+
+    if (!predictions || predictions.length === 0) {
+      return res.status(200).json({
+        ok: true,
+        message: 'No predictions yet',
+        calibration: null
+      });
+    }
+
+    // Recupera risultati
+    const { data: results } = await supabase
+      .from('results')
+      .select('*');
+
+    // Join predictions + results
+    const matched = predictions
+      .map(p => ({
+        ...p,
+        result: results?.find(r => r.match_id === p.match_id)
+      }))
+      .filter(p => p.result !== undefined);
+
+    if (matched.length === 0) {
+      return res.status(200).json({
+        ok: true,
+        message: 'No matched predictions',
+        calibration: null
+      });
+    }
+
+    // Calcola accuracy globale
+    const correct = matched.filter(
+      p => p.prediction_1x2 === p.result.result_1x2
+    ).length;
+    const globalAccuracy = correct / matched.length;
+
+    // Calcola accuracy ultimi 10
+    const recent10 = matched.slice(0, 10);
+    const recent10Correct = recent10.filter(
+      p => p.prediction_1x2 === p.result.result_1x2
+    ).length;
+    const recentAccuracy = recent10.length > 0 ? recent10Correct / recent10.length : globalAccuracy;
+
+    // Shrinkage: 70% globale + 30% recente
+    const shrinkageWeight = 0.3;
+    const shrunkenAccuracy =
+      globalAccuracy * (1 - shrinkageWeight) +
+      recentAccuracy * shrinkageWeight;
+
+    // Salva metriche su DB
+    await supabase.from('calibration_metrics').upsert(
+      {
+        metric_name: 'overall_accuracy',
+        value: globalAccuracy,
+        recency_weight: shrinkageWeight,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'metric_name' }
+    );
+
+    await supabase.from('calibration_metrics').upsert(
+      {
+        metric_name: 'shrunk_accuracy',
+        value: shrunkenAccuracy,
+        recency_weight: shrinkageWeight,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'metric_name' }
+    );
+
+    await supabase.from('calibration_metrics').upsert(
+      {
+        metric_name: 'recent_accuracy',
+        value: recentAccuracy,
+        recency_weight: shrinkageWeight,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'metric_name' }
+    );
+
+    // Calcola MAE sui gol
+    const mae =
+      matched.reduce((sum, p) => {
+        const predGols = (p.xg_home || 0) + (p.xg_away || 0);
+        const actualGols = p.result.goals_home + p.result.goals_away;
+        return sum + Math.abs(predGols - actualGols);
+      }, 0) / matched.length;
+
+    await supabase.from('calibration_metrics').upsert(
+      {
+        metric_name: 'mae_goals',
+        value: mae,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'metric_name' }
+    );
+
+    return res.status(200).json({
+      ok: true,
+      stats: {
+        globalAccuracy: (globalAccuracy * 100).toFixed(2) + '%',
+        recentAccuracy: (recentAccuracy * 100).toFixed(2) + '%',
+        shrunkenAccuracy: (shrunkenAccuracy * 100).toFixed(2) + '%',
+        mae: mae.toFixed(2),
+        totalMatched: matched.length
+      }
+    });
+  } catch (error: any) {
+    console.error('calibrate error:', error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+}
