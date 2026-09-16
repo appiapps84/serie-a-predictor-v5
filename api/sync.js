@@ -1,15 +1,7 @@
-export default async function handler(request) {
-  return new Response(
-    JSON.stringify({
-      ok: true,
-      message: "SYNC FUNCTION FUNZIONA",
-      time: new Date().toISOString()
-    }),
-    {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json"
-      }
-    }
-  );
+export default function handler(req, res) {
+  res.status(200).json({
+    ok: true,
+    test: "SYNC-12345",
+    time: new Date().toISOString()
+  });
 }
