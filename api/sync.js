@@ -9,10 +9,10 @@ const OPTIONAL_TIMEOUT = 6000;
 
 const MAX_STATS_REQUESTS = 8;
 const MAX_LINEUP_REQUESTS = 6;
-const STORED_MATCHES_LIMIT = 100;
+const STORED_MATCHES_LIMIT = 200;
 
 /**
- * Chiamata generica a Big Balls Sports Data.
+ * Chiamata a Big Balls Data.
  */
 async function fetchBBS(path, timeoutMs = OPTIONAL_TIMEOUT) {
   if (!API_KEY) {
@@ -79,8 +79,7 @@ async function fetchBBS(path, timeoutMs = OPTIONAL_TIMEOUT) {
 }
 
 /**
- * Estrae un array anche se BBD lo mette dentro data,
- * matches, fixtures, events, ecc.
+ * Estrae un array da diverse strutture JSON.
  */
 function extractArray(data, keys = []) {
   if (Array.isArray(data)) {
@@ -113,7 +112,7 @@ function extractArray(data, keys = []) {
 }
 
 /**
- * Recupera l'ID della partita indipendentemente dal formato.
+ * ID partita.
  */
 function getMatchId(match) {
   if (!match || typeof match !== "object") {
@@ -131,7 +130,7 @@ function getMatchId(match) {
 }
 
 /**
- * Recupera il nome di una squadra.
+ * Nome squadra.
  */
 function getTeamName(team) {
   if (!team) {
@@ -152,20 +151,26 @@ function getTeamName(team) {
 }
 
 /**
- * Converte un valore numerico in sicurezza.
+ * Conversione numerica sicura.
  */
 function toNumber(value) {
-  if (value === null || value === undefined || value === "") {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
     return null;
   }
 
   const number = Number(value);
 
-  return Number.isFinite(number) ? number : null;
+  return Number.isFinite(number)
+    ? number
+    : null;
 }
 
 /**
- * Cerca xG in diverse strutture JSON possibili.
+ * Ricerca ricorsiva degli xG.
  */
 function extractXG(data) {
   if (!data) {
@@ -179,10 +184,9 @@ function extractXG(data) {
 
     /*
      * Caso:
-     * {
-     *   home: { xg: 1.52 },
-     *   away: { xg: 0.84 }
-     * }
+     *
+     * home: { xg: 1.45 }
+     * away: { xg: 0.82 }
      */
     const homeObject =
       obj.home ??
@@ -231,11 +235,13 @@ function extractXG(data) {
 
     /*
      * Caso:
-     * home_xg / away_xg
-     * homeXG / awayXG
-     * ecc.
+     *
+     * home_xg
+     * away_xg
+     * homeXG
+     * awayXG
      */
-    const homeXGCandidates = [
+    const homeCandidates = [
       obj.home_xg,
       obj.homeXG,
       obj.home_xG,
@@ -245,7 +251,7 @@ function extractXG(data) {
       obj.expectedGoalsHome
     ];
 
-    const awayXGCandidates = [
+    const awayCandidates = [
       obj.away_xg,
       obj.awayXG,
       obj.away_xG,
@@ -258,7 +264,7 @@ function extractXG(data) {
     let homeXG = null;
     let awayXG = null;
 
-    for (const value of homeXGCandidates) {
+    for (const value of homeCandidates) {
       const number = toNumber(value);
 
       if (
@@ -271,7 +277,7 @@ function extractXG(data) {
       }
     }
 
-    for (const value of awayXGCandidates) {
+    for (const value of awayCandidates) {
       const number = toNumber(value);
 
       if (
@@ -296,6 +302,7 @@ function extractXG(data) {
 
     /*
      * Caso:
+     *
      * xg: {
      *   home: 1.5,
      *   away: 0.8
@@ -338,7 +345,7 @@ function extractXG(data) {
     }
 
     /*
-     * Cerca ricorsivamente nei contenitori comuni.
+     * Ricerca dentro contenitori.
      */
     const children = [
       "data",
@@ -381,33 +388,34 @@ function extractXG(data) {
 }
 
 /**
- * Partite attuali:
- * live + scheduled.
+ * Match correnti.
  */
 async function fetchCurrentMatches() {
   return fetchBBS(
-    `/v1/matches?sport=${SPORT}&league=${LEAGUE}`,
+    `/v1/matches?sport=${SPORT}&league=${LEAGUE}&limit=50`,
     MATCH_TIMEOUT
   );
 }
 
 /**
- * Archivio storico.
+ * Storico FINITO.
  *
- * Importante:
- * prendiamo le partite memorizzate e poi selezioniamo
- * quelle già concluse localmente, così non dipendiamo
- * dal fatto che l'API accetti o meno il parametro status.
+ * Qui usiamo esplicitamente:
+ *
+ * status=finished
+ * limit=200
+ *
+ * BBD documenta entrambi i parametri.
  */
-async function fetchStoredMatches() {
+async function fetchFinishedMatches() {
   return fetchBBS(
-    `/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&limit=${STORED_MATCHES_LIMIT}`,
+    `/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&status=finished&limit=${STORED_MATCHES_LIMIT}`,
     MATCH_TIMEOUT
   );
 }
 
 /**
- * Recupera statistiche di una partita storica.
+ * Stats della partita.
  */
 async function fetchMatchStats(matchId) {
   if (!matchId) {
@@ -433,7 +441,7 @@ async function fetchMatchStats(matchId) {
 }
 
 /**
- * Recupera la formazione di una partita.
+ * Lineup.
  */
 async function fetchMatchLineup(matchId) {
   if (!matchId) {
@@ -451,74 +459,14 @@ async function fetchMatchLineup(matchId) {
 }
 
 /**
- * Determina se una partita è terminata.
- */
-function isFinishedMatch(match) {
-  if (!match || typeof match !== "object") {
-    return false;
-  }
-
-  const status = String(
-    match.status ??
-    match.state ??
-    match.match_status ??
-    ""
-  ).toLowerCase();
-
-  const finishedStatuses = [
-    "finished",
-    "complete",
-    "completed",
-    "ft",
-    "final",
-    "ended",
-    "after"
-  ];
-
-  if (finishedStatuses.includes(status)) {
-    return true;
-  }
-
-  /*
-   * Alcune risposte possono non avere uno status
-   * ma avere comunque il risultato finale.
-   */
-  const score = match.score ?? match.scores ?? null;
-
-  if (score && typeof score === "object") {
-    const home =
-      score.home ??
-      score.home_score ??
-      score.homeScore ??
-      score.value?.home;
-
-    const away =
-      score.away ??
-      score.away_score ??
-      score.awayScore ??
-      score.value?.away;
-
-    if (
-      home !== null &&
-      home !== undefined &&
-      away !== null &&
-      away !== undefined
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Esegue la sincronizzazione completa.
+ * Handler principale.
  */
 async function run(res) {
   const started = Date.now();
 
   const diagnostics = {
     apiKeyDetected: Boolean(API_KEY),
+
     requests: 0,
 
     matches: {
@@ -529,8 +477,7 @@ async function run(res) {
     storedMatches: {
       status: null,
       elapsedMs: null,
-      count: 0,
-      finishedCount: 0
+      count: 0
     },
 
     standings: {
@@ -554,6 +501,9 @@ async function run(res) {
     }
   };
 
+  /*
+   * API KEY
+   */
   if (!API_KEY) {
     return res.status(500).json({
       ok: false,
@@ -563,59 +513,71 @@ async function run(res) {
   }
 
   /*
-   * --------------------------------------------------
-   * 1. MATCH CORRENTI
-   * --------------------------------------------------
+   * ================================================
+   * 1. MATCH FUTURI / CORRENTI
+   * ================================================
    */
-  const matchStarted = Date.now();
+
+  const matchesStarted = Date.now();
 
   diagnostics.requests++;
 
-  const matchesResult = await fetchCurrentMatches();
+  const matchesResult =
+    await fetchCurrentMatches();
 
-  diagnostics.matches.status = matchesResult.status;
+  diagnostics.matches.status =
+    matchesResult.status;
+
   diagnostics.matches.elapsedMs =
-    Date.now() - matchStarted;
+    Date.now() - matchesStarted;
 
   if (!matchesResult.ok) {
-    return res
-      .status(
+    return res.status(
+      matchesResult.timeout
+        ? 504
+        : matchesResult.status || 500
+    ).json({
+      ok: false,
+
+      error:
         matchesResult.timeout
-          ? 504
-          : matchesResult.status || 500
-      )
-      .json({
-        ok: false,
-        error: matchesResult.timeout
           ? "Big Balls Data non ha risposto entro 8 secondi."
           : `Errore Big Balls Data HTTP ${matchesResult.status}.`,
-        body: matchesResult.data || null,
-        diagnostics: {
-          ...diagnostics,
-          totalElapsedMs: Date.now() - started
-        }
-      });
+
+      body:
+        matchesResult.data || null,
+
+      diagnostics: {
+        ...diagnostics,
+
+        totalElapsedMs:
+          Date.now() - started
+      }
+    });
   }
 
-  const matches = extractArray(
-    matchesResult.data,
-    [
-      "matches",
-      "fixtures",
-      "events"
-    ]
-  );
+  const matches =
+    extractArray(
+      matchesResult.data,
+      [
+        "matches",
+        "fixtures",
+        "events"
+      ]
+    );
 
   /*
-   * --------------------------------------------------
-   * 2. STORICO
-   * --------------------------------------------------
+   * ================================================
+   * 2. STORICO FINITO
+   * ================================================
    */
+
   const storedStarted = Date.now();
 
   diagnostics.requests++;
 
-  const storedResult = await fetchStoredMatches();
+  const storedResult =
+    await fetchFinishedMatches();
 
   diagnostics.storedMatches.status =
     storedResult.status;
@@ -626,43 +588,38 @@ async function run(res) {
   let storedMatches = [];
 
   if (storedResult.ok) {
-    storedMatches = extractArray(
-      storedResult.data,
-      [
-        "matches",
-        "fixtures",
-        "events"
-      ]
-    );
+    storedMatches =
+      extractArray(
+        storedResult.data,
+        [
+          "matches",
+          "fixtures",
+          "events"
+        ]
+      );
   }
 
   diagnostics.storedMatches.count =
     storedMatches.length;
 
   /*
-   * Prendiamo solo partite concluse.
-   */
-  const finishedMatches =
-    storedMatches.filter(isFinishedMatch);
-
-  diagnostics.storedMatches.finishedCount =
-    finishedMatches.length;
-
-  /*
-   * --------------------------------------------------
+   * ================================================
    * 3. STANDINGS
-   * --------------------------------------------------
+   * ================================================
    */
+
   let standings = [];
 
-  const standingsStarted = Date.now();
+  const standingsStarted =
+    Date.now();
 
   diagnostics.requests++;
 
-  const standingsResult = await fetchBBS(
-    `/v1/standings?sport=${SPORT}&league=${LEAGUE}`,
-    OPTIONAL_TIMEOUT
-  );
+  const standingsResult =
+    await fetchBBS(
+      `/v1/standings?sport=${SPORT}&league=${LEAGUE}`,
+      OPTIONAL_TIMEOUT
+    );
 
   diagnostics.standings.status =
     standingsResult.status;
@@ -671,33 +628,33 @@ async function run(res) {
     Date.now() - standingsStarted;
 
   if (standingsResult.ok) {
-    standings = extractArray(
-      standingsResult.data,
-      [
-        "standings",
-        "table",
-        "rows"
-      ]
-    );
+    standings =
+      extractArray(
+        standingsResult.data,
+        [
+          "standings",
+          "table",
+          "rows"
+        ]
+      );
   }
 
   /*
-   * --------------------------------------------------
+   * ================================================
    * 4. XG STORICI
-   * --------------------------------------------------
+   * ================================================
    */
 
-  /*
-   * Usiamo prima le partite concluse.
-   *
-   * Se BBD non restituisce status "finished"
-   * ma lo storico contiene comunque match con score,
-   * isFinishedMatch() li recupera.
-   */
   const statsCandidates =
-    finishedMatches
-      .filter(match => Boolean(getMatchId(match)))
-      .slice(0, MAX_STATS_REQUESTS);
+    storedMatches
+      .filter(
+        match =>
+          Boolean(getMatchId(match))
+      )
+      .slice(
+        0,
+        MAX_STATS_REQUESTS
+      );
 
   const matchXG = [];
 
@@ -711,7 +668,8 @@ async function run(res) {
       break;
     }
 
-    const matchId = getMatchId(match);
+    const matchId =
+      getMatchId(match);
 
     diagnostics.stats.requested++;
     diagnostics.requests++;
@@ -719,11 +677,19 @@ async function run(res) {
     const statsResult =
       await fetchMatchStats(matchId);
 
+    /*
+     * Se BBD restituisce 429,
+     * smettiamo immediatamente.
+     */
     if (!statsResult.ok) {
       diagnostics.stats.errors++;
 
-      if (statsResult.status === 429) {
-        diagnostics.stats.rateLimited = true;
+      if (
+        statsResult.status === 429
+      ) {
+        diagnostics.stats.rateLimited =
+          true;
+
         break;
       }
 
@@ -733,8 +699,7 @@ async function run(res) {
     diagnostics.stats.successful++;
 
     /*
-     * Se la partita non ha xG disponibile,
-     * passiamo alla successiva.
+     * Nessun xG per questa partita.
      */
     if (!statsResult.xG) {
       continue;
@@ -754,28 +719,39 @@ async function run(res) {
       match.awayTeam ||
       "";
 
-    const xg = statsResult.xG;
+    const xg =
+      statsResult.xG;
 
+    /*
+     * Salviamo xG della singola partita.
+     */
     matchXG.push({
       matchId,
 
       homeTeam,
+
       awayTeam,
 
-      homeXG: Number(
-        xg.homeXG.toFixed(3)
-      ),
+      homeXG:
+        Number(
+          xg.homeXG.toFixed(3)
+        ),
 
-      awayXG: Number(
-        xg.awayXG.toFixed(3)
-      ),
+      awayXG:
+        Number(
+          xg.awayXG.toFixed(3)
+        ),
 
-      source: "BBD stored match stats"
+      source:
+        "BBD stored match stats"
     });
 
     /*
-     * Media xG squadra.
+     * ============================================
+     * MEDIA XG SQUADRA
+     * ============================================
      */
+
     const homeKey =
       homeTeam
         .trim()
@@ -816,7 +792,7 @@ async function run(res) {
   }
 
   /*
-   * Calcola media xG per squadra.
+   * Calcolo media xG per squadra.
    */
   const teamXG = {};
 
@@ -825,25 +801,34 @@ async function run(res) {
     of Object.entries(teamAccumulator)
   ) {
     if (value.count > 0) {
-      teamXG[team] = Number(
-        (
-          value.sum /
-          value.count
-        ).toFixed(3)
-      );
+      teamXG[team] =
+        Number(
+          (
+            value.sum /
+            value.count
+          ).toFixed(3)
+        );
     }
   }
 
   /*
-   * --------------------------------------------------
+   * ================================================
    * 5. LINEUPS
-   * --------------------------------------------------
+   * ================================================
    */
 
   const lineupCandidates =
     matches
-      .filter(match => Boolean(getMatchId(match)))
-      .slice(0, MAX_LINEUP_REQUESTS);
+      .filter(
+        match =>
+          Boolean(
+            getMatchId(match)
+          )
+      )
+      .slice(
+        0,
+        MAX_LINEUP_REQUESTS
+      );
 
   const lineups = [];
 
@@ -855,7 +840,8 @@ async function run(res) {
       break;
     }
 
-    const matchId = getMatchId(match);
+    const matchId =
+      getMatchId(match);
 
     diagnostics.lineups.requested++;
     diagnostics.requests++;
@@ -866,8 +852,12 @@ async function run(res) {
     if (!lineupResult.ok) {
       diagnostics.lineups.errors++;
 
-      if (lineupResult.status === 429) {
-        diagnostics.lineups.rateLimited = true;
+      if (
+        lineupResult.status === 429
+      ) {
+        diagnostics.lineups.rateLimited =
+          true;
+
         break;
       }
 
@@ -883,28 +873,37 @@ async function run(res) {
   }
 
   /*
-   * --------------------------------------------------
+   * ================================================
    * 6. COVERAGE
-   * --------------------------------------------------
+   * ================================================
    */
-  const coverage = {
-    matches: matches.length,
 
-    xG: matchXG.length,
+  const coverage = {
+    matches:
+      matches.length,
+
+    storedFinishedMatches:
+      storedMatches.length,
+
+    xG:
+      matchXG.length,
 
     teamsWithXG:
       Object.keys(teamXG).length,
 
-    lineups: lineups.length,
+    lineups:
+      lineups.length,
 
-    standings: standings.length
+    standings:
+      standings.length
   };
 
   /*
-   * --------------------------------------------------
+   * ================================================
    * 7. RISPOSTA
-   * --------------------------------------------------
+   * ================================================
    */
+
   return res.status(200).json({
     ok: true,
 
@@ -939,9 +938,12 @@ async function run(res) {
 }
 
 /**
- * Vercel serverless function.
+ * Vercel Serverless Function.
  */
-export default async function handler(req, res) {
+export default async function handler(
+  req,
+  res
+) {
   res.setHeader(
     "Access-Control-Allow-Origin",
     "*"
@@ -963,7 +965,7 @@ export default async function handler(req, res) {
   );
 
   /*
-   * CORS preflight.
+   * CORS.
    */
   if (req.method === "OPTIONS") {
     return res.status(204).end();
@@ -990,7 +992,10 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       ok: false,
-      error: "SYNC_FAILED",
+
+      error:
+        "SYNC_FAILED",
+
       message:
         error?.message ||
         "Errore durante la sincronizzazione.",
