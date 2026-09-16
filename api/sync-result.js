@@ -1,17 +1,17 @@
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
 );
 
-function mapResult(score: any): string {
+function mapResult(score) {
   if (score.home > score.away) return '1';
   if (score.away > score.home) return '2';
   return 'X';
 }
 
-export default async function handler(req: any, res: any) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -26,18 +26,15 @@ export default async function handler(req: any, res: any) {
     const results = [];
 
     for (const match of storedMatches) {
-      // Estrai info base
       const matchId = match?.id ?? match?.match_id ?? match?.fixture_id;
       const homeTeam = match?.home?.name ?? match?.home_name;
       const awayTeam = match?.away?.name ?? match?.away_name;
       const score = match?.score;
 
-      // Salta se incomplete
       if (!matchId || !homeTeam || !awayTeam || !score) continue;
 
       const result1x2 = mapResult(score);
 
-      // Salva su Supabase
       const { error } = await supabase.from('results').upsert(
         {
           match_id: String(matchId),
@@ -51,9 +48,7 @@ export default async function handler(req: any, res: any) {
         { onConflict: 'match_id' }
       );
 
-      if (error) {
-        console.error(`Error saving result for match ${matchId}:`, error);
-      } else {
+      if (!error) {
         results.push({
           match_id: matchId,
           home_team: homeTeam,
@@ -63,21 +58,16 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Triggerai calibrazione (asincrono, non blocca)
-    fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/calibrate`, {
-      method: 'POST'
-    }).catch(err => console.error('Calibrate trigger error:', err));
-
     return res.status(200).json({
       ok: true,
       message: `${results.length} results saved`,
       results
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('sync-result error:', error);
     return res.status(500).json({
       ok: false,
       error: error.message
     });
   }
-}
+};
