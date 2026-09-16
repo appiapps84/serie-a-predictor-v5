@@ -1,51 +1,106 @@
-const BBS_BASE = "https://api.bigballsdata.com";
+// api/sync.js
 
+const BBS_BASE = "https://api.bigballsdata.com";
 const SPORT = "football";
-const LEAGUE = "seriea";
+
+// IMPORTANTE:
+// /v1/matches funziona con "seriea" nel progetto attuale.
+// L'endpoint xG leaderboard usa invece il codice documentato "serie-a".
+const MATCH_LEAGUE = "seriea";
+const XG_LEAGUE = "serie-a";
 
 const TIMEOUT = 12000;
 
-// Limiti sicuri per il piano Free.
-const MAX_HISTORICAL_MATCHES = 20;
-const MAX_HISTORICAL_STATS = 8;
+// Limiti volutamente bassi per restare molto sotto il Free tier.
 const MAX_LINEUPS = 6;
+const XG_LIMIT = 200;
 
-/* =========================================================
-   BASIC HELPERS
-========================================================= */
-
-function getKey() {
-  return process.env.BBS_API_KEY || "";
+function jsonResponse(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+      ...extraHeaders
+    }
+  });
 }
 
-function normalizeText(value) {
-  return String(value || "")
-    .trim()
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const normalized = String(value)
+    .replace(",", ".")
+    .replace(/[^\d.-]/g, "");
+
+  if (!normalized) {
+    return null;
+  }
+
+  const n = Number(normalized);
+
+  return Number.isFinite(n) ? n : null;
+}
+
+function round(value, decimals = 3) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) {
+    return null;
+  }
+
+  const factor = 10 ** decimals;
+
+  return Math.round(n * factor) / factor;
+}
+
+function normalizeTeamName(name) {
+  return String(name || "")
     .toLowerCase()
-    .replace(/\s+/g, " ");
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b(a\.?s\.?|ac|fc|ssc|us|ss|calcio)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
-function extractArray(payload) {
-  if (Array.isArray(payload)) return payload;
+function sameTeam(a, b) {
+  const x = normalizeTeamName(a);
+  const y = normalizeTeamName(b);
 
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.data?.matches)) {
-    return payload.data.matches;
-  }
-  if (Array.isArray(payload?.matches)) {
-    return payload.matches;
-  }
-  if (Array.isArray(payload?.results)) {
-    return payload.results;
+  if (!x || !y) {
+    return false;
   }
 
-  return [];
-}
+  if (x === y) {
+    return true;
+  }
 
-function extractData(payload) {
-  return payload?.data !== undefined
-    ? payload.data
-    : payload;
+  const aliases = {
+    "inter milan": "inter",
+    "internazionale": "inter",
+    "inter": "inter",
+
+    "como 1907": "como",
+    "como": "como",
+
+    "as roma": "roma",
+    "roma": "roma",
+
+    "ac milan": "milan",
+    "milan": "milan",
+
+    "venezia fc": "venezia",
+    "venezia": "venezia"
+  };
+
+  return (aliases[x] || x) === (aliases[y] || y);
 }
 
 function getMatchId(match) {
@@ -53,8 +108,24 @@ function getMatchId(match) {
     match?.id ||
     match?.match_id ||
     match?.matchId ||
-    match?.fixture_id ||
-    match?.fixtureId ||
+    null
+  );
+}
+
+function getTeamName(team) {
+  if (!team) {
+    return null;
+  }
+
+  if (typeof team === "string") {
+    return team;
+  }
+
+  return (
+    team.name ||
+    team.team_name ||
+    team.teamName ||
+    team.short_name ||
     null
   );
 }
@@ -62,1138 +133,825 @@ function getMatchId(match) {
 function getKickoff(match) {
   return (
     match?.kickoff_utc ||
-    match?.kickoffUtc ||
     match?.kickoff ||
     match?.start_time ||
     match?.startTime ||
-    match?.date ||
     null
   );
 }
 
-function getStatus(match) {
-  return normalizeText(
-    match?.status ||
-      match?.state ||
-      match?.match_status ||
-      match?.matchStatus ||
-      ""
-  );
-}
-
-function getTeamName(team) {
-  if (!team) return null;
-
-  if (typeof team === "string") {
-    return team;
-  }
-
-  if (typeof team === "object") {
-    return (
-      team.name ||
-      team.team_name ||
-      team.teamName ||
-      team.short_name ||
-      team.shortName ||
-      null
-    );
-  }
-
-  return null;
-}
-
-function getHomeTeam(match) {
-  return getTeamName(
-    match?.home ||
-      match?.home_team ||
-      match?.homeTeam ||
-      match?.teams?.home
-  );
-}
-
-function getAwayTeam(match) {
-  return getTeamName(
-    match?.away ||
-      match?.away_team ||
-      match?.awayTeam ||
-      match?.teams?.away
-  );
-}
-
-function isFuture(match) {
-  const kickoff = getKickoff(match);
-
-  if (!kickoff) return false;
-
-  const time = Date.parse(kickoff);
-
-  if (!Number.isFinite(time)) return false;
-
-  return time > Date.now();
-}
-
-function isFinished(match) {
-  const status = getStatus(match);
+function isScheduled(match) {
+  const status = String(match?.status || "").toLowerCase();
 
   if (
-    [
-      "finished",
-      "final",
-      "ft",
-      "completed",
-      "complete",
-      "ended",
-    ].includes(status)
+    status.includes("scheduled") ||
+    status.includes("upcoming") ||
+    status.includes("pre") ||
+    status === "not_started"
   ) {
     return true;
   }
 
-  const score =
-    match?.score ||
-    match?.scores ||
-    match?.final_score ||
-    match?.finalScore;
+  return !match?.score && !match?.home_score && !match?.away_score;
+}
 
-  if (score && typeof score === "object") {
-    const home =
-      score.home ??
-      score.home_score ??
-      score.homeScore ??
-      score?.full_time?.home;
+function collectArrays(value, result = [], depth = 0) {
+  if (depth > 8 || value === null || value === undefined) {
+    return result;
+  }
 
-    const away =
-      score.away ??
-      score.away_score ??
-      score.awayScore ??
-      score?.full_time?.away;
+  if (Array.isArray(value)) {
+    result.push(value);
 
-    if (
-      home !== null &&
-      home !== undefined &&
-      away !== null &&
-      away !== undefined
-    ) {
-      return true;
+    for (const item of value) {
+      collectArrays(item, result, depth + 1);
+    }
+
+    return result;
+  }
+
+  if (typeof value === "object") {
+    for (const key of Object.keys(value)) {
+      collectArrays(value[key], result, depth + 1);
     }
   }
 
-  return false;
+  return result;
 }
 
-/* =========================================================
-   BBS REQUEST
-========================================================= */
+function findXGRows(payload) {
+  const arrays = collectArrays(payload);
+  const rows = [];
 
-async function fetchJSON(path, key) {
-  const controller = new AbortController();
-
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, TIMEOUT);
-
-  try {
-    const response = await fetch(
-      `${BBS_BASE}${path}`,
-      {
-        method: "GET",
-
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "X-API-Key": key,
-          Accept: "application/json",
-        },
-
-        signal: controller.signal,
+  for (const arr of arrays) {
+    for (const item of arr) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        continue;
       }
-    );
 
-    const retryAfter =
-      response.headers.get("Retry-After");
+      const hasPlayer =
+        item.player_name !== undefined ||
+        item.playerName !== undefined ||
+        item.name !== undefined;
 
-    let body = null;
+      const hasTeam =
+        item.team_name !== undefined ||
+        item.teamName !== undefined ||
+        item.team !== undefined;
 
-    try {
-      body = await response.json();
-    } catch {
-      body = null;
+      const hasXG =
+        item.xg !== undefined ||
+        item.expected_goals !== undefined ||
+        item.expectedGoals !== undefined;
+
+      if (hasPlayer && hasTeam && hasXG) {
+        rows.push(item);
+      }
+    }
+  }
+
+  // Elimina duplicati.
+  const seen = new Set();
+
+  return rows.filter((row) => {
+    const player =
+      row.player_name ||
+      row.playerName ||
+      row.name ||
+      "";
+
+    const team =
+      row.team_name ||
+      row.teamName ||
+      getTeamName(row.team) ||
+      "";
+
+    const key = `${player}|${team}`;
+
+    if (seen.has(key)) {
+      return false;
     }
 
-    if (!response.ok) {
-      const error = new Error(
-        `BBS ${response.status}: ${JSON.stringify(body)}`
-      );
+    seen.add(key);
 
-      error.status = response.status;
-      error.body = body;
-      error.retryAfter = retryAfter
-        ? Number(retryAfter)
-        : null;
-
-      throw error;
-    }
-
-    return body;
-  } finally {
-    clearTimeout(timeout);
-  }
+    return true;
+  });
 }
 
-async function safeFetch(
-  path,
-  key,
-  diagnostics,
-  label
-) {
-  try {
-    return await fetchJSON(path, key);
-  } catch (error) {
-    diagnostics.errors.push({
-      label,
-      path,
-      status: error?.status || null,
-      message:
-        error?.message || String(error),
-      retryAfter:
-        error?.retryAfter ?? null,
-    });
+function parseXGRow(row) {
+  const player =
+    row.player_name ||
+    row.playerName ||
+    row.name ||
+    null;
 
-    return null;
-  }
-}
+  const team =
+    row.team_name ||
+    row.teamName ||
+    getTeamName(row.team) ||
+    null;
 
-/* =========================================================
-   xG PARSER
-========================================================= */
+  const xg = toNumber(
+    row.xg ??
+    row.expected_goals ??
+    row.expectedGoals
+  );
 
-function numberOrNull(value) {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-    return null;
-  }
+  const npxg = toNumber(
+    row.npxg ??
+    row.non_penalty_xg ??
+    row.nonPenaltyXG
+  );
 
-  const number = Number(value);
+  const xa = toNumber(
+    row.xa ??
+    row.expected_assists ??
+    row.expectedAssists
+  );
 
-  return Number.isFinite(number)
-    ? number
-    : null;
-}
+  const matches = toNumber(
+    row.matches ??
+    row.apps ??
+    row.appearances
+  );
 
-function validXG(home, away) {
-  const h = numberOrNull(home);
-  const a = numberOrNull(away);
+  const minutes = toNumber(
+    row.minutes ??
+    row.mins
+  );
 
-  if (h === null || a === null) {
-    return null;
-  }
+  const goals = toNumber(row.goals);
+  const assists = toNumber(row.assists);
 
-  if (h < 0 || a < 0) {
-    return null;
-  }
-
-  if (h > 10 || a > 10) {
+  if (!team || xg === null) {
     return null;
   }
 
   return {
-    home: h,
-    away: a,
+    player,
+    team,
+    xG: xg,
+    npxG,
+    xA: xa,
+    matches,
+    minutes,
+    goals,
+    assists
   };
 }
 
-function getValue(object, keys) {
-  if (
-    !object ||
-    typeof object !== "object"
-  ) {
-    return null;
-  }
+function buildTeamXG(rows, matches) {
+  const byTeam = {};
 
-  for (const key of keys) {
-    if (
-      object[key] !== undefined &&
-      object[key] !== null
-    ) {
-      return object[key];
-    }
-  }
+  for (const row of rows) {
+    const team = row.team;
 
-  return null;
-}
-
-function tryHomeAwayObject(node) {
-  if (
-    !node ||
-    typeof node !== "object"
-  ) {
-    return null;
-  }
-
-  const home =
-    node.home ||
-    node.home_team ||
-    node.homeTeam ||
-    node.home_side ||
-    node.homeSide;
-
-  const away =
-    node.away ||
-    node.away_team ||
-    node.awayTeam ||
-    node.away_side ||
-    node.awaySide;
-
-  if (
-    !home ||
-    !away ||
-    typeof home !== "object" ||
-    typeof away !== "object"
-  ) {
-    return null;
-  }
-
-  const homeXG = getValue(
-    home,
-    [
-      "xg",
-      "XG",
-      "xG",
-      "expected_goals",
-      "expectedGoals",
-      "expected_xg",
-      "expectedXG",
-      "expected_goal",
-      "expectedGoal",
-    ]
-  );
-
-  const awayXG = getValue(
-    away,
-    [
-      "xg",
-      "XG",
-      "xG",
-      "expected_goals",
-      "expectedGoals",
-      "expected_xg",
-      "expectedXG",
-      "expected_goal",
-      "expectedGoal",
-    ]
-  );
-
-  return validXG(
-    homeXG,
-    awayXG
-  );
-}
-
-function tryDirectFields(node) {
-  if (
-    !node ||
-    typeof node !== "object"
-  ) {
-    return null;
-  }
-
-  const keys = Object.keys(node);
-
-  let homeKey = null;
-  let awayKey = null;
-
-  for (const key of keys) {
-    const normalized = key
-      .toLowerCase()
-      .replace(/[\s-]+/g, "_");
-
-    if (
-      [
-        "home_xg",
-        "homexg",
-        "home_expected_goals",
-        "home_expected_xg",
-      ].includes(normalized)
-    ) {
-      homeKey = key;
+    if (!team) {
+      continue;
     }
 
-    if (
-      [
-        "away_xg",
-        "awayxg",
-        "away_expected_goals",
-        "away_expected_xg",
-      ].includes(normalized)
-    ) {
-      awayKey = key;
-    }
-  }
+    const key = normalizeTeamName(team);
 
-  if (!homeKey || !awayKey) {
-    return null;
-  }
-
-  return validXG(
-    node[homeKey],
-    node[awayKey]
-  );
-}
-
-function tryNestedXG(node) {
-  if (
-    !node ||
-    typeof node !== "object"
-  ) {
-    return null;
-  }
-
-  const keys = Object.keys(node);
-
-  for (const key of keys) {
-    const normalized = key
-      .toLowerCase()
-      .replace(/[\s-]+/g, "_");
-
-    if (
-      normalized === "xg" ||
-      normalized === "expected_xg" ||
-      normalized === "expected_goals" ||
-      normalized === "expectedgoals"
-    ) {
-      const value = node[key];
-
-      if (
-        value &&
-        typeof value === "object"
-      ) {
-        const home = getValue(
-          value,
-          [
-            "home",
-            "home_xg",
-            "homeXG",
-            "home_expected_goals",
-            "homeExpectedGoals",
-          ]
-        );
-
-        const away = getValue(
-          value,
-          [
-            "away",
-            "away_xg",
-            "awayXG",
-            "away_expected_goals",
-            "awayExpectedGoals",
-          ]
-        );
-
-        const result = validXG(
-          home,
-          away
-        );
-
-        if (result) {
-          return result;
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-function findXGValues(
-  node,
-  depth = 0
-) {
-  if (
-    node === null ||
-    node === undefined ||
-    depth > 15
-  ) {
-    return null;
-  }
-
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      const result =
-        findXGValues(
-          item,
-          depth + 1
-        );
-
-      if (result) {
-        return result;
-      }
+    if (!key) {
+      continue;
     }
 
-    return null;
-  }
-
-  if (typeof node !== "object") {
-    return null;
-  }
-
-  // 1. home/away objects
-  let result =
-    tryHomeAwayObject(node);
-
-  if (result) {
-    return result;
-  }
-
-  // 2. home_xg / away_xg
-  result =
-    tryDirectFields(node);
-
-  if (result) {
-    return result;
-  }
-
-  // 3. xg: { home, away }
-  result =
-    tryNestedXG(node);
-
-  if (result) {
-    return result;
-  }
-
-  // 4. Recursive search
-  for (const key of Object.keys(node)) {
-    result =
-      findXGValues(
-        node[key],
-        depth + 1
-      );
-
-    if (result) {
-      return result;
-    }
-  }
-
-  return null;
-}
-
-/* =========================================================
-   DIAGNOSTIC STRUCTURE
-========================================================= */
-
-function collectInterestingKeys(
-  node,
-  output = new Set(),
-  depth = 0
-) {
-  if (
-    node === null ||
-    node === undefined ||
-    depth > 12
-  ) {
-    return output;
-  }
-
-  if (Array.isArray(node)) {
-    for (
-      const item of node.slice(0, 50)
-    ) {
-      collectInterestingKeys(
-        item,
-        output,
-        depth + 1
-      );
-    }
-
-    return output;
-  }
-
-  if (typeof node !== "object") {
-    return output;
-  }
-
-  for (
-    const [key, value] of Object.entries(node)
-  ) {
-    const normalized =
-      key.toLowerCase();
-
-    if (
-      normalized.includes("xg") ||
-      normalized.includes("expected") ||
-      normalized.includes("goal") ||
-      normalized.includes("stat") ||
-      normalized.includes("metric")
-    ) {
-      output.add(key);
-    }
-
-    collectInterestingKeys(
-      value,
-      output,
-      depth + 1
-    );
-  }
-
-  return output;
-}
-
-/* =========================================================
-   SAFE SAMPLE OF STATS RESPONSE
-
-   We return only the first 8 KB for debugging.
-========================================================= */
-
-function makeSample(payload) {
-  try {
-    const text =
-      JSON.stringify(payload);
-
-    if (!text) {
-      return null;
-    }
-
-    return text.slice(0, 8000);
-  } catch {
-    return null;
-  }
-}
-
-/* =========================================================
-   TEAM xG
-========================================================= */
-
-function buildTeamXG(rows) {
-  const teams = {};
-
-  function add(
-    team,
-    value
-  ) {
-    if (!team) return;
-
-    const xg =
-      numberOrNull(value);
-
-    if (xg === null) {
-      return;
-    }
-
-    const normalized =
-      normalizeText(team);
-
-    if (!normalized) {
-      return;
-    }
-
-    if (!teams[normalized]) {
-      teams[normalized] = {
-        name: team,
-        values: [],
+    if (!byTeam[key]) {
+      byTeam[key] = {
+        team,
+        xG: 0,
+        npxG: 0,
+        xA: 0,
+        goals: 0,
+        assists: 0,
+        players: 0,
+        playerRows: [],
+        maxPlayerMatches: 0,
+        totalMinutes: 0
       };
     }
 
-    teams[normalized].values.push(xg);
-  }
+    byTeam[key].xG += row.xG || 0;
+    byTeam[key].npxG += row.npxG || 0;
+    byTeam[key].xA += row.xA || 0;
+    byTeam[key].goals += row.goals || 0;
+    byTeam[key].assists += row.assists || 0;
+    byTeam[key].players += 1;
 
-  for (const row of rows) {
-    if (!row.xg) continue;
+    if (row.matches !== null) {
+      byTeam[key].maxPlayerMatches = Math.max(
+        byTeam[key].maxPlayerMatches,
+        row.matches
+      );
+    }
 
-    add(
-      row.homeTeam,
-      row.xg.home
-    );
+    if (row.minutes !== null) {
+      byTeam[key].totalMinutes += row.minutes;
+    }
 
-    add(
-      row.awayTeam,
-      row.xg.away
-    );
+    byTeam[key].playerRows.push({
+      player: row.player,
+      xG: round(row.xG, 3),
+      npxG: row.npxG === null ? null : round(row.npxG, 3),
+      xA: row.xA === null ? null : round(row.xA, 3),
+      matches: row.matches,
+      minutes: row.minutes
+    });
   }
 
   const result = {};
 
-  for (
-    const team of Object.values(teams)
-  ) {
-    if (!team.values.length) {
-      continue;
-    }
+  for (const key of Object.keys(byTeam)) {
+    const item = byTeam[key];
 
-    const average =
-      team.values.reduce(
-        (sum, value) =>
-          sum + value,
-        0
-      ) /
-      team.values.length;
+    // Il numero massimo di presenze di un giocatore regolare
+    // è un'approssimazione ragionevole delle partite disputate
+    // dalla squadra nel feed xG.
+    //
+    // Se non disponibile, usiamo le partite già concluse trovate
+    // nel feed matches.
+    const estimatedMatches =
+      item.maxPlayerMatches > 0
+        ? item.maxPlayerMatches
+        : countFinishedMatchesForTeam(item.team, matches);
 
-    result[team.name] = {
-      xGPerMatch:
-        Number(
-          average.toFixed(3)
-        ),
+    const xGPerMatch =
+      estimatedMatches > 0
+        ? item.xG / estimatedMatches
+        : null;
 
-      samples:
-        team.values.length,
+    const npxGPerMatch =
+      estimatedMatches > 0
+        ? item.npxG / estimatedMatches
+        : null;
+
+    result[item.team] = {
+      team: item.team,
+
+      xG: round(item.xG, 3),
+      npxG: round(item.npxG, 3),
+      xA: round(item.xA, 3),
+
+      goals: Math.round(item.goals),
+      assists: Math.round(item.assists),
+
+      players: item.players,
+      matches: estimatedMatches,
+
+      xGPerMatch: round(xGPerMatch, 3),
+      npxGPerMatch: round(npxGPerMatch, 3),
+
+      playerRows: item.playerRows
+        .sort((a, b) => (b.xG || 0) - (a.xG || 0))
+        .slice(0, 15)
     };
   }
 
   return result;
 }
 
-/* =========================================================
-   MAIN HANDLER
-========================================================= */
-
-export default async function handler(
-  req,
-  res
-) {
-  const startedAt =
-    Date.now();
-
-  const key =
-    getKey();
-
-  /*
-   * Vercel cache:
-   * evita che refresh multipli chiamino subito BBS.
-   */
-  res.setHeader(
-    "Cache-Control",
-    "s-maxage=300, stale-while-revalidate=600"
-  );
-
-  if (!key) {
-    return res.status(500).json({
-      ok: false,
-      error:
-        "Missing BBS_API_KEY environment variable",
-    });
+function countFinishedMatchesForTeam(teamName, matches) {
+  if (!teamName || !Array.isArray(matches)) {
+    return 0;
   }
 
-  const diagnostics = {
-    apiKeyDetected: true,
+  let count = 0;
 
-    errors: [],
+  for (const match of matches) {
+    const home = getTeamName(match?.home);
+    const away = getTeamName(match?.away);
 
-    historicalStatsChecked: 0,
+    if (
+      sameTeam(teamName, home) ||
+      sameTeam(teamName, away)
+    ) {
+      const status = String(match?.status || "").toLowerCase();
 
-    lineupsChecked: 0,
+      const finished =
+        !!match?.score ||
+        status.includes("final") ||
+        status.includes("finished") ||
+        status === "ft" ||
+        status === "completed";
 
-    xGSamples: [],
-  };
+      if (finished) {
+        count += 1;
+      }
+    }
+  }
+
+  return count;
+}
+
+function buildXGTeamLookup(teamXG) {
+  const lookup = {};
+
+  for (const key of Object.keys(teamXG || {})) {
+    const item = teamXG[key];
+
+    lookup[key] = item;
+
+    const normalized = normalizeTeamName(item.team);
+
+    if (normalized) {
+      lookup[normalized] = item;
+    }
+  }
+
+  return lookup;
+}
+
+function attachXGToMatches(matches, teamXG) {
+  const lookup = buildXGTeamLookup(teamXG);
+
+  return matches.map((match) => {
+    const homeName = getTeamName(match?.home);
+    const awayName = getTeamName(match?.away);
+
+    const homeKey = Object.keys(lookup).find((key) =>
+      sameTeam(key, homeName)
+    );
+
+    const awayKey = Object.keys(lookup).find((key) =>
+      sameTeam(key, awayName)
+    );
+
+    const homeXG = homeKey ? lookup[homeKey] : null;
+    const awayXG = awayKey ? lookup[awayKey] : null;
+
+    return {
+      ...match,
+
+      modelData: {
+        xG: {
+          home:
+            homeXG?.xGPerMatch ??
+            homeXG?.xG ??
+            null,
+
+          away:
+            awayXG?.xGPerMatch ??
+            awayXG?.xG ??
+            null
+        },
+
+        xGSeason: {
+          home: homeXG?.xG ?? null,
+          away: awayXG?.xG ?? null
+        },
+
+        xGPerMatch: {
+          home: homeXG?.xGPerMatch ?? null,
+          away: awayXG?.xGPerMatch ?? null
+        }
+      }
+    };
+  });
+}
+
+async function fetchBBS(path, apiKey) {
+  const controller = new AbortController();
+
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, TIMEOUT);
 
   try {
-    /* =======================================================
-       1. MATCHES
-       1 request
-    ======================================================= */
+    const response = await fetch(`${BBS_BASE}${path}`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "X-API-Key": apiKey,
+        Authorization: `Bearer ${apiKey}`
+      },
+      signal: controller.signal
+    });
 
-    const matchesPayload =
-      await fetchJSON(
-        `/v1/matches?sport=${SPORT}&league=${LEAGUE}&limit=50`,
-        key
+    const text = await response.text();
+
+    let body = null;
+
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = text;
+    }
+
+    if (!response.ok) {
+      const error = new Error(
+        `BBS ${response.status}: ${
+          typeof body === "string"
+            ? body
+            : JSON.stringify(body)
+        }`
       );
 
-    const matches =
-      extractArray(
-        matchesPayload
+      error.status = response.status;
+      error.body = body;
+
+      const retryAfter = response.headers.get("Retry-After");
+
+      if (retryAfter) {
+        error.retryAfter = retryAfter;
+      }
+
+      throw error;
+    }
+
+    return body;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extractItems(payload, possibleKeys = []) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  for (const key of possibleKeys) {
+    if (Array.isArray(payload[key])) {
+      return payload[key];
+    }
+  }
+
+  if (Array.isArray(payload.data)) {
+    return payload.data;
+  }
+
+  if (
+    payload.data &&
+    typeof payload.data === "object"
+  ) {
+    for (const key of possibleKeys) {
+      if (Array.isArray(payload.data[key])) {
+        return payload.data[key];
+      }
+    }
+  }
+
+  return [];
+}
+
+async function handler(req) {
+  const startedAt = Date.now();
+
+  const apiKey = process.env.BBS_API_KEY;
+
+  const diagnostics = {
+    apiKeyDetected: !!apiKey,
+    requestCount: 0,
+    errors: [],
+    xG: {
+      endpoint: null,
+      rowsFound: 0,
+      teamsFound: 0,
+      sample: []
+    }
+  };
+
+  if (!apiKey) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: "Missing BBS_API_KEY environment variable.",
+        generatedAt: new Date().toISOString(),
+        diagnostics
+      },
+      500
+    );
+  }
+
+  async function request(path, label) {
+    diagnostics.requestCount += 1;
+
+    try {
+      return await fetchBBS(path, apiKey);
+    } catch (error) {
+      diagnostics.errors.push({
+        type: label,
+        status: error.status || null,
+        message: error.message,
+        retryAfter: error.retryAfter || null
+      });
+
+      throw error;
+    }
+  }
+
+  try {
+    // ============================================================
+    // 1. MATCHES
+    // ============================================================
+
+    let matchesPayload;
+
+    try {
+      matchesPayload = await request(
+        `/v1/matches?sport=${encodeURIComponent(
+          SPORT
+        )}&league=${encodeURIComponent(MATCH_LEAGUE)}`,
+        "matches"
       );
+    } catch (error) {
+      if (error.status === 429) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: "BBS rate limit reached while loading matches.",
+            generatedAt: new Date().toISOString(),
+            diagnostics: {
+              ...diagnostics,
+              status: 429,
+              body: error.body || null
+            }
+          },
+          429
+        );
+      }
 
-    /* =======================================================
-       2. STANDINGS
-       1 request
-    ======================================================= */
+      throw error;
+    }
 
-    const standingsPayload =
-      await safeFetch(
-        `/v1/standings?sport=${SPORT}&league=${LEAGUE}`,
-        key,
-        diagnostics,
+    const matches = extractItems(
+      matchesPayload,
+      ["matches", "fixtures", "events"]
+    );
+
+    // ============================================================
+    // 2. XG LEADERBOARD
+    //
+    // Questo è il punto fondamentale del nuovo sync.
+    // BBD documenta:
+    //
+    // GET /v1/leagues/serie-a/xg-leaders?stat=xg
+    //
+    // ============================================================
+
+    let xGPayload = null;
+
+    try {
+      const xGPath =
+        `/v1/leagues/${encodeURIComponent(
+          XG_LEAGUE
+        )}/xg-leaders?stat=xg&season=2026&limit=${XG_LIMIT}`;
+
+      diagnostics.xG.endpoint = xGPath;
+
+      xGPayload = await request(
+        xGPath,
+        "xg_leaders"
+      );
+    } catch (error) {
+      // Non facciamo fallire tutto il sync se il solo
+      // endpoint xG ha temporaneamente un problema.
+      xGPayload = null;
+    }
+
+    const rawXGRows = xGPayload
+      ? findXGRows(xGPayload)
+      : [];
+
+    const parsedXGRows = rawXGRows
+      .map(parseXGRow)
+      .filter(Boolean);
+
+    diagnostics.xG.rowsFound = parsedXGRows.length;
+
+    diagnostics.xG.sample = parsedXGRows
+      .slice(0, 10)
+      .map((row) => ({
+        player: row.player,
+        team: row.team,
+        xG: row.xG,
+        npxG: row.npxG,
+        xA: row.xA,
+        matches: row.matches,
+        minutes: row.minutes
+      }));
+
+    // ============================================================
+    // 3. TEAM XG
+    // ============================================================
+
+    const teamXG = buildTeamXG(
+      parsedXGRows,
+      matches
+    );
+
+    diagnostics.xG.teamsFound =
+      Object.keys(teamXG).length;
+
+    // ============================================================
+    // 4. ATTACH XG TO FIXTURES
+    // ============================================================
+
+    const enrichedMatches = attachXGToMatches(
+      matches,
+      teamXG
+    );
+
+    // ============================================================
+    // 5. STANDINGS
+    //
+    // Una sola chiamata. Se il feed non risponde,
+    // il resto del sync rimane utilizzabile.
+    // ============================================================
+
+    let standings = [];
+    let standingsError = null;
+
+    try {
+      const standingsPayload = await request(
+        `/v1/standings?sport=${encodeURIComponent(
+          SPORT
+        )}&league=${encodeURIComponent(MATCH_LEAGUE)}`,
         "standings"
       );
 
-    const standings =
-      extractArray(
-        standingsPayload
+      standings = extractItems(
+        standingsPayload,
+        [
+          "standings",
+          "rows",
+          "table"
+        ]
       );
 
-    /* =======================================================
-       3. HISTORICAL MATCHES
-       1 request
-    ======================================================= */
-
-    const historicalPayload =
-      await safeFetch(
-        `/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&status=finished&limit=${MAX_HISTORICAL_MATCHES}`,
-        key,
-        diagnostics,
-        "historical_matches"
-      );
-
-    const historicalMatches =
-      extractArray(
-        historicalPayload
-      );
-
-    /* =======================================================
-       4. HISTORICAL STATS
-       max 8 requests
-    ======================================================= */
-
-    const historicalCandidates =
-      historicalMatches
-        .filter(isFinished)
-        .slice(
-          0,
-          MAX_HISTORICAL_STATS
-        );
-
-    const historicalRows = [];
-
-    for (
-      const match of historicalCandidates
-    ) {
-      const matchId =
-        getMatchId(match);
-
-      if (!matchId) {
-        continue;
-      }
-
-      const statsPayload =
-        await safeFetch(
-          `/v1/stored/matches/${encodeURIComponent(
-            matchId
-          )}/stats`,
-          key,
-          diagnostics,
-          "historical_stats"
-        );
-
-      diagnostics.historicalStatsChecked++;
-
-      if (!statsPayload) {
-        continue;
-      }
-
-      const xg =
-        findXGValues(
-          statsPayload
-        );
-
-      const row = {
-        id: matchId,
-
-        homeTeam:
-          getHomeTeam(match),
-
-        awayTeam:
-          getAwayTeam(match),
-
-        kickoff:
-          getKickoff(match),
-
-        xg:
-          xg || null,
-      };
-
-      historicalRows.push(
-        row
-      );
-
-      /*
-       * DIAGNOSTICA:
-       * prendiamo una sola risposta stats.
-       */
+      // Alcune risposte possono essere:
+      // { standings: [{ rows: [...] }] }
       if (
-        diagnostics.xGSamples.length === 0
+        standings.length > 0 &&
+        standings[0] &&
+        Array.isArray(standings[0].rows)
       ) {
-        diagnostics.xGSamples.push({
-          id: matchId,
-
-          homeTeam:
-            row.homeTeam,
-
-          awayTeam:
-            row.awayTeam,
-
-          foundXG:
-            Boolean(xg),
-
-          parsedXG:
-            xg || null,
-
-          interestingKeys:
-            Array.from(
-              collectInterestingKeys(
-                statsPayload
-              )
-            ).slice(0, 100),
-
-          sampleStats:
-            makeSample(
-              statsPayload
-            ),
-        });
+        standings = standings.flatMap(
+          (group) => group.rows || []
+        );
       }
-    }
-
-    /* =======================================================
-       5. DIRECT MATCH xG
-    ======================================================= */
-
-    const directMatchXG = {};
-
-    for (
-      const row of historicalRows
-    ) {
-      if (!row.xg) {
-        continue;
-      }
-
-      directMatchXG[
-        row.id
-      ] = {
-        home:
-          row.xg.home,
-
-        away:
-          row.xg.away,
+    } catch (error) {
+      standingsError = {
+        status: error.status || null,
+        message: error.message
       };
     }
 
-    /* =======================================================
-       6. TEAM xG
-    ======================================================= */
+    // ============================================================
+    // 6. LINEUPS
+    //
+    // Solo per alcune prossime partite per non consumare
+    // inutilmente il rate limit.
+    // ============================================================
 
-    const teamXG =
-      buildTeamXG(
-        historicalRows
-      );
+    const futureMatches = matches
+      .filter(isScheduled)
+      .sort((a, b) => {
+        const da = new Date(getKickoff(a) || 0).getTime();
+        const db = new Date(getKickoff(b) || 0).getTime();
 
-    /* =======================================================
-       7. LINEUPS
-       max 6 requests
-    ======================================================= */
-
-    const upcoming =
-      matches
-        .filter(isFuture)
-        .sort(
-          (a, b) => {
-            const ta =
-              Date.parse(
-                getKickoff(a) || ""
-              );
-
-            const tb =
-              Date.parse(
-                getKickoff(b) || ""
-              );
-
-            return ta - tb;
-          }
-        )
-        .slice(
-          0,
-          MAX_LINEUPS
-        );
+        return da - db;
+      })
+      .slice(0, MAX_LINEUPS);
 
     const lineups = [];
+    let lineupsChecked = 0;
 
-    for (
-      const match of upcoming
-    ) {
-      const matchId =
-        getMatchId(match);
+    for (const match of futureMatches) {
+      const id = getMatchId(match);
 
-      if (!matchId) {
+      if (!id) {
         continue;
       }
 
-      const lineupPayload =
-        await safeFetch(
-          `/v1/stored/matches/${encodeURIComponent(
-            matchId
+      try {
+        const payload = await request(
+          `/v1/matches/${encodeURIComponent(
+            id
           )}/lineups`,
-          key,
-          diagnostics,
-          "lineups"
+          "lineup"
         );
 
-      diagnostics.lineupsChecked++;
+        lineupsChecked += 1;
 
-      if (!lineupPayload) {
-        continue;
+        lineups.push({
+          matchId: id,
+          home: getTeamName(match.home),
+          away: getTeamName(match.away),
+          data: payload
+        });
+      } catch (error) {
+        // Non interrompiamo il sync per una singola lineup.
       }
-
-      lineups.push({
-        matchId,
-
-        homeTeam:
-          getHomeTeam(match),
-
-        awayTeam:
-          getAwayTeam(match),
-
-        kickoff:
-          getKickoff(match),
-
-        data:
-          extractData(
-            lineupPayload
-          ),
-      });
     }
 
-    /* =======================================================
-       8. RESPONSE
-    ======================================================= */
+    // ============================================================
+    // 7. OUTPUT
+    // ============================================================
 
-    const requestBudgetEstimate =
-      1 + // matches
-      1 + // standings
-      1 + // historical matches
-      historicalCandidates.length +
-      upcoming.length;
+    const coverage = {
+      matches: matches.length,
 
-    return res.status(200).json({
+      xG: parsedXGRows.length,
+
+      directMatchXG: 0,
+
+      teamsWithXG:
+        Object.keys(teamXG).length,
+
+      lineups: lineupsChecked,
+
+      standings: standings.length
+    };
+
+    // "xG" viene mantenuto come numero di righe giocatore
+    // con xG valido. Il dato utile per il predictor è teamXG.
+    //
+    // Se almeno una squadra ha xG, consideriamo l'xG disponibile.
+    const xGAvailable =
+      Object.keys(teamXG).length > 0;
+
+    const response = {
       ok: true,
 
-      source:
-        "Big Balls Sports Data",
+      source: "Big Balls Sports Data",
 
-      league:
-        LEAGUE,
+      league: "seriea",
 
       generatedAt:
         new Date().toISOString(),
 
+      elapsedMs:
+        Date.now() - startedAt,
+
       coverage: {
-        matches:
-          matches.length,
+        ...coverage,
 
-        historicalMatches:
-          historicalMatches.length,
-
-        historicalStatsChecked:
-          diagnostics.historicalStatsChecked,
-
-        xG:
-          Object.keys(
-            directMatchXG
-          ).length,
-
-        directMatchXG:
-          Object.keys(
-            directMatchXG
-          ).length,
-
-        teamsWithXG:
-          Object.keys(
-            teamXG
-          ).length,
-
-        lineups:
-          lineups.length,
-
-        standings:
-          standings.length,
+        xGAvailable
       },
 
-      matches,
-
-      standings,
+      matches: enrichedMatches,
 
       teamXG,
 
-      directMatchXG,
-
       lineups,
 
+      standings,
+
       diagnostics: {
-        apiKeyDetected:
-          true,
+        ...diagnostics,
 
-        requestBudgetEstimate,
+        standingsAvailable:
+          standings.length > 0,
 
-        errors:
-          diagnostics.errors,
+        standingsError,
 
-        xGSamples:
-          diagnostics.xGSamples,
+        requestCount:
+          diagnostics.requestCount,
 
-        durationMs:
-          Date.now() - startedAt,
-      },
-    });
+        cache:
+          "5 minutes + stale-while-revalidate 10 minutes"
+      }
+    };
+
+    return jsonResponse(response);
   } catch (error) {
-    /* =======================================================
-       429
-    ======================================================= */
+    const status =
+      error.status === 429
+        ? 429
+        : 500;
 
-    if (
-      error?.status === 429
-    ) {
-      return res.status(429).json({
+    return jsonResponse(
+      {
         ok: false,
 
         error:
-          "Big Balls Data rate limit reached.",
+          error.message ||
+          "Unknown sync error",
 
-        message:
-          "Wait for Retry-After before calling /api/sync again.",
-
-        retryAfter:
-          error.retryAfter ??
-          null,
+        generatedAt:
+          new Date().toISOString(),
 
         diagnostics: {
-          apiKeyDetected:
-            true,
+          ...diagnostics,
 
-          status: 429,
+          status,
 
           body:
-            error.body ||
-            null,
+            error.body || null,
 
-          durationMs:
-            Date.now() -
-            startedAt,
-        },
-      });
-    }
-
-    /* =======================================================
-       OTHER ERROR
-    ======================================================= */
-
-    return res.status(500).json({
-      ok: false,
-
-      error:
-        error?.message ||
-        "Unknown sync error",
-
-      diagnostics: {
-        apiKeyDetected:
-          true,
-
-        status:
-          error?.status ||
-          null,
-
-        body:
-          error?.body ||
-          null,
-
-        durationMs:
-          Date.now() -
-          startedAt,
+          retryAfter:
+            error.retryAfter || null
+        }
       },
-    });
+      status
+    );
   }
+}
+
+export default async function handler(req) {
+  return handler(req);
 }
