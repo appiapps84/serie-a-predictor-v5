@@ -1,11 +1,27 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Serie A Predictor V5</title>
 
   <style>
+    :root {
+      --bg: #07111f;
+      --panel: #0d1b2d;
+      --panel-2: #102238;
+      --border: #1d3552;
+      --text: #f4f7fb;
+      --muted: #91a4bb;
+      --accent: #3b82f6;
+      --accent-2: #60a5fa;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --white: #ffffff;
+    }
+
     * {
       box-sizing: border-box;
     }
@@ -13,215 +29,372 @@
     body {
       margin: 0;
       font-family: Arial, Helvetica, sans-serif;
-      background: #0b1020;
-      color: #f5f7fb;
+      background:
+        radial-gradient(circle at top, #102a48 0%, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
     }
 
     .container {
-      width: min(1100px, 94%);
+      width: min(1180px, calc(100% - 30px));
       margin: 0 auto;
       padding: 28px 0 50px;
     }
 
-    h1 {
-      margin: 0 0 8px;
-      font-size: 32px;
+    header {
+      text-align: center;
+      margin-bottom: 28px;
     }
 
-    .subtitle {
-      color: #9ca8bd;
-      margin-bottom: 24px;
+    header h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 46px);
+      letter-spacing: -1px;
     }
 
-    .card {
-      background: #121a2b;
-      border: 1px solid #25314a;
-      border-radius: 16px;
-      padding: 20px;
+    header p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: center;
       margin-bottom: 18px;
     }
 
-    .toolbar {
+    .status {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px 16px;
+      color: var(--muted);
+      font-size: 14px;
+      min-height: 46px;
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+      align-items: center;
+    }
+
+    .status.success {
+      color: #86efac;
+      border-color: rgba(34, 197, 94, 0.4);
+    }
+
+    .status.error {
+      color: #fca5a5;
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    .status.loading {
+      color: #93c5fd;
+      border-color: rgba(59, 130, 246, 0.4);
     }
 
     button {
       border: 0;
       border-radius: 10px;
-      padding: 12px 18px;
+      padding: 13px 20px;
       font-weight: 700;
       cursor: pointer;
-      background: #2563eb;
       color: white;
+      background: var(--accent);
+      transition: 0.2s ease;
+    }
+
+    button:hover {
+      background: var(--accent-2);
+      transform: translateY(-1px);
     }
 
     button:disabled {
-      opacity: .5;
+      opacity: 0.55;
       cursor: not-allowed;
+      transform: none;
     }
 
-    .status {
-      margin-top: 14px;
-      padding: 12px 14px;
-      border-radius: 10px;
-      background: #0d1525;
-      color: #b8c4d8;
-      border: 1px solid #22304a;
-      min-height: 44px;
+    .panel {
+      background: rgba(13, 27, 45, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.18);
     }
 
-    .status.ok {
-      color: #9ae6b4;
-      border-color: #22543d;
+    .panel h2 {
+      margin: 0 0 16px;
+      font-size: 19px;
     }
 
-    .status.error {
-      color: #feb2b2;
-      border-color: #742a2a;
-    }
-
-    .grid {
+    .selectors {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 15px;
+      align-items: end;
     }
 
-    label {
+    .field label {
       display: block;
+      color: var(--muted);
+      font-size: 13px;
       margin-bottom: 7px;
-      color: #aebbd0;
-      font-size: 14px;
-      font-weight: 700;
     }
 
     select {
       width: 100%;
-      padding: 12px;
+      background: #091728;
+      color: var(--text);
+      border: 1px solid var(--border);
       border-radius: 10px;
-      border: 1px solid #34425e;
-      background: #0d1525;
-      color: white;
+      padding: 13px;
       font-size: 15px;
+      outline: none;
     }
 
-    .hidden {
-      display: none;
+    select:focus {
+      border-color: var(--accent);
     }
 
-    .prediction-header {
+    .vs {
+      font-weight: 800;
+      color: var(--muted);
+      padding-bottom: 13px;
+    }
+
+    .competition {
+      margin-top: 15px;
+    }
+
+    .competition select {
+      max-width: 300px;
+    }
+
+    .predict-wrap {
+      margin-top: 18px;
+      text-align: center;
+    }
+
+    .predict-button {
+      min-width: 240px;
+      font-size: 16px;
+      padding: 14px 24px;
+    }
+
+    .section-title {
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 12px;
-      flex-wrap: wrap;
+      margin-bottom: 13px;
     }
 
-    .prediction-title {
-      font-size: 22px;
-      font-weight: 700;
+    .section-title h2 {
+      margin: 0;
     }
 
-    .badge {
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: #1d4ed8;
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .section-title {
-      margin: 22px 0 12px;
-      font-size: 17px;
-    }
-
-    .result-grid {
+    .grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 12px;
     }
 
-    .result-box {
-      background: #0d1525;
-      border: 1px solid #25314a;
+    .grid-2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 14px;
-      text-align: center;
+      padding: 16px;
+      min-height: 92px;
     }
 
-    .result-box .label {
-      color: #94a3b8;
+    .card .label {
+      color: var(--muted);
       font-size: 12px;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
 
-    .result-box .value {
-      font-size: 24px;
+    .card .value {
+      font-size: 25px;
       font-weight: 800;
     }
 
-    .score-list {
+    .card .sub {
+      color: var(--muted);
+      margin-top: 5px;
+      font-size: 12px;
+    }
+
+    .big-result {
+      text-align: center;
+      padding: 24px 16px;
+    }
+
+    .big-result .value {
+      font-size: clamp(34px, 7vw, 58px);
+    }
+
+    .probability-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .prob-card {
+      text-align: center;
+      padding: 20px 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .prob-card .label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .prob-card .value {
+      font-size: 30px;
+      font-weight: 800;
+    }
+
+    .scores {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 10px;
     }
 
-    .score {
-      background: #0d1525;
-      border: 1px solid #25314a;
-      border-radius: 10px;
-      padding: 12px;
+    .score-card {
       text-align: center;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 7px;
     }
 
-    .score strong {
-      display: block;
-      font-size: 18px;
-      margin-bottom: 5px;
+    .score-card .score {
+      font-size: 20px;
+      font-weight: 800;
     }
 
-    .muted {
-      color: #94a3b8;
+    .score-card .prob {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
     }
 
-    .small {
+    .factor-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .factor {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    .factor-name {
+      color: var(--muted);
+    }
+
+    .factor-value {
+      font-weight: 700;
+    }
+
+    .yes {
+      color: #86efac;
+    }
+
+    .no {
+      color: #fca5a5;
+    }
+
+    .info {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .error-box {
+      background: rgba(127, 29, 29, 0.28);
+      border: 1px solid rgba(239, 68, 68, 0.45);
+      color: #fecaca;
+      border-radius: 12px;
+      padding: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
       font-size: 13px;
     }
 
-    .coverage {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px;
-      margin-top: 15px;
-    }
-
-    .coverage-item {
-      background: #0d1525;
-      border-radius: 10px;
-      padding: 12px;
+    .footer {
       text-align: center;
-      border: 1px solid #22304a;
-    }
-
-    .coverage-item strong {
-      display: block;
-      font-size: 20px;
-      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 28px;
     }
 
     @media (max-width: 800px) {
-      .grid,
-      .result-grid {
+      .topbar {
         grid-template-columns: 1fr;
       }
 
-      .score-list {
+      .selectors {
+        grid-template-columns: 1fr;
+      }
+
+      .vs {
+        text-align: center;
+        padding: 0;
+      }
+
+      .grid,
+      .grid-2,
+      .probability-grid {
         grid-template-columns: repeat(2, 1fr);
       }
 
-      .coverage {
+      .scores {
         grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 500px) {
+      .container {
+        width: min(100% - 18px, 1180px);
+        padding-top: 18px;
+      }
+
+      .panel {
+        padding: 15px;
+      }
+
+      .grid,
+      .grid-2,
+      .probability-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .scores {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .card .value {
+        font-size: 22px;
       }
     }
   </style>
@@ -231,735 +404,846 @@
 
 <div class="container">
 
-  <h1>⚽ Serie A Predictor V5</h1>
+  <header>
+    <h1>⚽ Serie A Predictor V5</h1>
+    <p>Predizione multi-fattore con Poisson + Dixon-Coles</p>
+  </header>
 
-  <div class="subtitle">
-    Previsioni Serie A con Big Balls Sports Data + modello Poisson / Dixon-Coles
-  </div>
-
-  <div class="card">
-
-    <div class="toolbar">
-      <button id="syncBtn">🔄 Sincronizza dati</button>
-      <button id="predictBtn">⚡ Calcola previsione</button>
-    </div>
-
+  <div class="topbar">
     <div id="status" class="status">
-      Pronto. Premi "Sincronizza dati".
+      In attesa di sincronizzazione...
     </div>
 
-    <div id="coverage"></div>
-
+    <button id="syncButton" type="button">
+      🔄 Sincronizza BBD
+    </button>
   </div>
 
-  <div class="card">
+  <section class="panel">
+    <h2>Seleziona partita</h2>
 
-    <div class="grid">
+    <div class="selectors">
 
-      <div>
+      <div class="field">
         <label for="homeTeam">Squadra casa</label>
-
         <select id="homeTeam">
-          <option value="">Sincronizza prima i dati...</option>
+          <option value="">Caricamento...</option>
         </select>
       </div>
 
-      <div>
-        <label for="awayTeam">Squadra ospite</label>
+      <div class="vs">VS</div>
 
+      <div class="field">
+        <label for="awayTeam">Squadra ospite</label>
         <select id="awayTeam">
-          <option value="">Sincronizza prima i dati...</option>
+          <option value="">Caricamento...</option>
         </select>
       </div>
 
     </div>
 
-    <div style="margin-top:16px">
-
-      <label for="competition">
-        Competizione
-      </label>
+    <div class="competition field">
+      <label for="competition">Competizione</label>
 
       <select id="competition">
         <option value="seriea">Serie A</option>
+        <option value="coppa">Coppa</option>
       </select>
-
     </div>
+
+    <div class="predict-wrap">
+      <button id="predictButton" class="predict-button" type="button">
+        📊 Calcola previsione
+      </button>
+    </div>
+  </section>
+
+  <div id="errorBox" class="error-box hidden"></div>
+
+  <div id="results" class="hidden">
+
+    <!-- PREVISIONE PRINCIPALE -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>🎯 Previsione principale</h2>
+      </div>
+
+      <div class="grid grid-2">
+
+        <div class="card big-result">
+          <div class="label">Expected Goals Casa</div>
+          <div id="homeXG" class="value">—</div>
+        </div>
+
+        <div class="card big-result">
+          <div class="label">Expected Goals Ospite</div>
+          <div id="awayXG" class="value">—</div>
+        </div>
+
+      </div>
+
+      <div class="info" style="margin-top:15px;">
+        Fonte modello:
+        <strong id="xgSource">—</strong>
+      </div>
+    </section>
+
+    <!-- 1X2 -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>1X2</h2>
+      </div>
+
+      <div class="probability-grid">
+
+        <div class="prob-card">
+          <div class="label">1 — Casa</div>
+          <div id="probHome" class="value">—</div>
+        </div>
+
+        <div class="prob-card">
+          <div class="label">X — Pareggio</div>
+          <div id="probDraw" class="value">—</div>
+        </div>
+
+        <div class="prob-card">
+          <div class="label">2 — Ospite</div>
+          <div id="probAway" class="value">—</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- DOPPIA CHANCE -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>Doppia Chance</h2>
+      </div>
+
+      <div class="grid">
+
+        <div class="card">
+          <div class="label">1X</div>
+          <div id="double1X" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">X2</div>
+          <div id="doubleX2" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">12</div>
+          <div id="double12" class="value">—</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- OVER UNDER -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>⚽ Over / Under</h2>
+      </div>
+
+      <div class="grid grid-2">
+
+        <div class="card">
+          <div class="label">Over 1.5</div>
+          <div id="over15" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Under 1.5</div>
+          <div id="under15" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Over 2.5</div>
+          <div id="over25" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Under 2.5</div>
+          <div id="under25" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Over 3.5</div>
+          <div id="over35" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Under 3.5</div>
+          <div id="under35" class="value">—</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- BTTS -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>BTTS — Gol/Gol</h2>
+      </div>
+
+      <div class="grid grid-2">
+
+        <div class="card">
+          <div class="label">Sì</div>
+          <div id="bttsYes" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">No</div>
+          <div id="bttsNo" class="value">—</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- HANDICAP -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>Handicap</h2>
+      </div>
+
+      <div class="grid">
+
+        <div class="card">
+          <div class="label">Casa -1</div>
+          <div id="handicapHomeMinus1" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Casa +1</div>
+          <div id="handicapHomePlus1" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Ospite +1</div>
+          <div id="handicapAwayPlus1" class="value">—</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- RISULTATI ESATTI -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>Risultati esatti più probabili</h2>
+      </div>
+
+      <div id="exactScores" class="scores"></div>
+    </section>
+
+    <!-- QUOTE EQUE -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>Quote eque del modello</h2>
+      </div>
+
+      <div class="grid grid-2">
+
+        <div class="card">
+          <div class="label">Casa</div>
+          <div id="fairHome" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Pareggio</div>
+          <div id="fairDraw" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Ospite</div>
+          <div id="fairAway" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Over 2.5</div>
+          <div id="fairOver25" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Under 2.5</div>
+          <div id="fairUnder25" class="value">—</div>
+        </div>
+
+        <div class="card">
+          <div class="label">BTTS Sì</div>
+          <div id="fairBttsYes" class="value">—</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- FATTORI -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>🧠 Fattori utilizzati</h2>
+      </div>
+
+      <div class="factor-list">
+
+        <div class="factor">
+          <span class="factor-name">xG diretto BBD</span>
+          <span id="factorDirectXG" class="factor-value">—</span>
+        </div>
+
+        <div class="factor">
+          <span class="factor-name">Classifica</span>
+          <span id="factorStandings" class="factor-value">—</span>
+        </div>
+
+        <div class="factor">
+          <span class="factor-name">Forma recente</span>
+          <span id="factorForm" class="factor-value">—</span>
+        </div>
+
+        <div class="factor">
+          <span class="factor-name">Casa / Trasferta</span>
+          <span id="factorHomeAway" class="factor-value">—</span>
+        </div>
+
+        <div class="factor">
+          <span class="factor-name">H2H</span>
+          <span id="factorH2H" class="factor-value">—</span>
+        </div>
+
+        <div class="factor">
+          <span class="factor-name">Line-up</span>
+          <span id="factorLineups" class="factor-value">—</span>
+        </div>
+
+        <div class="factor">
+          <span class="factor-name">Infortuni</span>
+          <span id="factorInjuries" class="factor-value">—</span>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- H2H -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>🤝 H2H</h2>
+      </div>
+
+      <div id="h2hSummary" class="info">
+        Nessun dato H2H disponibile.
+      </div>
+    </section>
+
+    <!-- CONFIDENCE -->
+    <section class="panel">
+      <div class="section-title">
+        <h2>📈 Confidence modello</h2>
+      </div>
+
+      <div class="card">
+        <div class="label">Affidabilità stimata</div>
+        <div id="confidence" class="value">—</div>
+        <div class="sub">
+          Indicatore interno del modello, non probabilità di successo.
+        </div>
+      </div>
+    </section>
 
   </div>
 
-  <div id="predictionCard" class="card hidden">
-
-    <div class="prediction-header">
-
-      <div>
-
-        <div
-          class="prediction-title"
-          id="predictionTitle"
-        >
-          Previsione
-        </div>
-
-        <div
-          class="muted small"
-          id="predictionSource"
-        ></div>
-
-      </div>
-
-      <div
-        class="badge"
-        id="confidenceBadge"
-      >
-        Confidenza —
-      </div>
-
-    </div>
-
-
-    <!-- 1X2 -->
-    <div class="section-title">
-      1X2
-    </div>
-
-    <div class="result-grid">
-
-      <div class="result-box">
-        <div class="label">Casa</div>
-        <div class="value" id="probHome">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Pareggio</div>
-        <div class="value" id="probDraw">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Ospite</div>
-        <div class="value" id="probAway">—</div>
-      </div>
-
-    </div>
-
-
-    <!-- DOPPIA CHANCE -->
-    <div class="section-title">
-      Doppia chance
-    </div>
-
-    <div class="result-grid">
-
-      <div class="result-box">
-        <div class="label">1X</div>
-        <div class="value" id="prob1X">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">X2</div>
-        <div class="value" id="probX2">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">12</div>
-        <div class="value" id="prob12">—</div>
-      </div>
-
-    </div>
-
-
-    <!-- OVER / UNDER -->
-    <div class="section-title">
-      Over / Under
-    </div>
-
-    <div class="result-grid">
-
-      <div class="result-box">
-        <div class="label">Over 1.5</div>
-        <div class="value" id="over15">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Under 1.5</div>
-        <div class="value" id="under15">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Over 2.5</div>
-        <div class="value" id="over25">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Under 2.5</div>
-        <div class="value" id="under25">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Over 3.5</div>
-        <div class="value" id="over35">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Under 3.5</div>
-        <div class="value" id="under35">—</div>
-      </div>
-
-    </div>
-
-
-    <!-- HANDICAP -->
-    <div class="section-title">
-      Handicap
-    </div>
-
-    <div class="result-grid">
-
-      <div class="result-box">
-        <div class="label">Handicap Casa -1</div>
-        <div class="value" id="handicapHomeMinus1">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Handicap Casa +1</div>
-        <div class="value" id="handicapHomePlus1">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Handicap Ospite +1</div>
-        <div class="value" id="handicapAwayPlus1">—</div>
-      </div>
-
-    </div>
-
-
-    <!-- GOL / NO GOL -->
-    <div class="section-title">
-      Gol / No Gol
-    </div>
-
-    <div class="result-grid">
-
-      <div class="result-box">
-        <div class="label">BTTS Sì</div>
-        <div class="value" id="bttsYes">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">BTTS No</div>
-        <div class="value" id="bttsNo">—</div>
-      </div>
-
-      <div class="result-box">
-        <div class="label">Gol attesi</div>
-        <div class="value" id="expectedGoals">—</div>
-      </div>
-
-    </div>
-
-
-    <!-- RISULTATI ESATTI -->
-    <div class="section-title">
-      Risultati esatti più probabili
-    </div>
-
-    <div
-      id="exactScores"
-      class="score-list"
-    ></div>
-
-
-    <!-- QUOTE FAIR -->
-    <div class="section-title">
-      Quote fair
-    </div>
-
-    <div
-      id="fairOdds"
-      class="small muted"
-    ></div>
-
+  <div class="footer">
+    Serie A Predictor V5 · Big Balls Sports Data · Poisson + Dixon-Coles
   </div>
 
 </div>
 
-
 <script>
+  "use strict";
 
-"use strict";
+  const state = {
+    matches: [],
+    standings: [],
+    teamXG: {},
+    form: {},
+    h2h: {},
+    lineups: [],
+    injuries: [],
+    syncData: null,
+    prediction: null
+  };
 
+  const aliases = {
+    "inter milan": "inter",
+    "internazionale": "inter",
+    "como 1907": "como",
+    "as roma": "roma",
+    "ac milan": "milan",
+    "venezia fc": "venezia"
+  };
 
-const state = {
-
-  matches: [],
-
-  standings: [],
-
-  teamXG: {},
-
-  lineups: [],
-
-  syncData: null,
-
-  prediction: null
-
-};
-
-
-const aliases = {
-
-  "inter milan": "Inter",
-  "internazionale": "Inter",
-  "fc internazionale": "Inter",
-  "como 1907": "Como",
-  "as roma": "Roma",
-  "ac milan": "Milan",
-  "venezia fc": "Venezia"
-
-};
-
-
-function extractTeamName(value) {
-
-  if (
-    value === null ||
-    value === undefined
-  ) {
-    return "";
+  function normalizeTeamName(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    return aliases[raw] || raw;
   }
 
-  if (typeof value === "string") {
-    return value.trim();
+  function getElement(id) {
+    return document.getElementById(id);
   }
 
-  if (typeof value === "number") {
-    return String(value);
+  function setText(id, value) {
+    const el = getElement(id);
+    if (el) el.textContent = value;
   }
 
-  if (typeof value === "object") {
+  function formatPercent(value) {
+    const n = Number(value);
 
-    const possibleNames = [
+    if (!Number.isFinite(n)) {
+      return "—";
+    }
 
-      value.name,
-      value.team_name,
-      value.teamName,
-      value.display_name,
-      value.displayName,
-      value.short_name,
-      value.shortName,
-      value.title,
-      value.label,
-      value.club_name,
-      value.clubName,
+    return `${(n * 100).toFixed(1)}%`;
+  }
 
-      value.team?.name,
-      value.team?.team_name,
-      value.team?.teamName,
+  function formatOdds(value) {
+    const n = Number(value);
 
-      value.home?.name,
-      value.away?.name,
+    if (!Number.isFinite(n) || n <= 0) {
+      return "—";
+    }
 
-      value.data?.name
+    return n.toFixed(2);
+  }
 
-    ];
+  function formatXG(value) {
+    const n = Number(value);
 
-    for (const candidate of possibleNames) {
+    if (!Number.isFinite(n)) {
+      return "—";
+    }
+
+    return n.toFixed(2);
+  }
+
+  function setStatus(message, type = "") {
+    const el = getElement("status");
+
+    if (!el) return;
+
+    el.textContent = message;
+    el.className = "status";
+
+    if (type) {
+      el.classList.add(type);
+    }
+  }
+
+  function showError(message) {
+    const box = getElement("errorBox");
+
+    if (!box) return;
+
+    box.textContent = message || "Errore sconosciuto.";
+    box.classList.remove("hidden");
+  }
+
+  function hideError() {
+    const box = getElement("errorBox");
+
+    if (!box) return;
+
+    box.textContent = "";
+    box.classList.add("hidden");
+  }
+
+  function showResults() {
+    getElement("results")?.classList.remove("hidden");
+  }
+
+  function hideResults() {
+    getElement("results")?.classList.add("hidden");
+  }
+
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+    const controller = new AbortController();
+
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function readJson(response) {
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(
+        `Risposta non JSON dal server. HTTP ${response.status}: ${text.slice(0, 500)}`
+      );
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+        data?.error ||
+        `Errore HTTP ${response.status}`
+      );
+    }
+
+    return data;
+  }
+
+  function extractTeamName(match, side) {
+    if (!match) return "";
+
+    if (side === "home") {
+      return (
+        match.home ||
+        match.homeTeam ||
+        match.home_team ||
+        match.home_name ||
+        match.home?.name ||
+        match.teams?.home?.name ||
+        ""
+      );
+    }
+
+    return (
+      match.away ||
+      match.awayTeam ||
+      match.away_team ||
+      match.away_name ||
+      match.away?.name ||
+      match.teams?.away?.name ||
+      ""
+    );
+  }
+
+  function getMatchDate(match) {
+    return (
+      match?.kickoff_utc ||
+      match?.kickoff ||
+      match?.date ||
+      match?.start_time ||
+      match?.startTime ||
+      ""
+    );
+  }
+
+  function getMatchScore(match) {
+    return (
+      match?.score ||
+      match?.result ||
+      match?.scores ||
+      null
+    );
+  }
+
+  function getMatchId(match) {
+    return (
+      match?.id ||
+      match?.match_id ||
+      match?.fixture_id ||
+      null
+    );
+  }
+
+  function normalizeMatch(match) {
+    return {
+      id: getMatchId(match),
+      home: extractTeamName(match, "home"),
+      away: extractTeamName(match, "away"),
+      kickoff_utc: getMatchDate(match),
+      status: match?.status || "",
+      score: getMatchScore(match),
+      xG: match?.xG ?? match?.xg ?? null
+    };
+  }
+
+  function getAvailableTeams(matches) {
+    const names = new Set();
+
+    for (const rawMatch of matches || []) {
+      const match = normalizeMatch(rawMatch);
+
+      if (match.home) names.add(match.home);
+      if (match.away) names.add(match.away);
+    }
+
+    return Array.from(names).sort((a, b) =>
+      a.localeCompare(b, "it")
+    );
+  }
+
+  function populateTeams() {
+    const homeSelect = getElement("homeTeam");
+    const awaySelect = getElement("awayTeam");
+
+    if (!homeSelect || !awaySelect) return;
+
+    const teams = getAvailableTeams(state.matches);
+
+    homeSelect.innerHTML = "";
+    awaySelect.innerHTML = "";
+
+    if (teams.length === 0) {
+      homeSelect.innerHTML =
+        '<option value="">Nessuna squadra disponibile</option>';
+
+      awaySelect.innerHTML =
+        '<option value="">Nessuna squadra disponibile</option>';
+
+      return;
+    }
+
+    const emptyHome = document.createElement("option");
+    emptyHome.value = "";
+    emptyHome.textContent = "Seleziona squadra";
+    homeSelect.appendChild(emptyHome);
+
+    const emptyAway = document.createElement("option");
+    emptyAway.value = "";
+    emptyAway.textContent = "Seleziona squadra";
+    awaySelect.appendChild(emptyAway);
+
+    for (const team of teams) {
+      const optionHome = document.createElement("option");
+      optionHome.value = team;
+      optionHome.textContent = team;
+      homeSelect.appendChild(optionHome);
+
+      const optionAway = document.createElement("option");
+      optionAway.value = team;
+      optionAway.textContent = team;
+      awaySelect.appendChild(optionAway);
+    }
+
+    if (teams.length >= 2) {
+      homeSelect.value = teams[0];
+      awaySelect.value = teams[1];
+    }
+  }
+
+  function findMatch(homeTeam, awayTeam) {
+    const homeWanted = normalizeTeamName(homeTeam);
+    const awayWanted = normalizeTeamName(awayTeam);
+
+    return state.matches.find(rawMatch => {
+      const match = normalizeMatch(rawMatch);
+
+      return (
+        normalizeTeamName(match.home) === homeWanted &&
+        normalizeTeamName(match.away) === awayWanted
+      );
+    }) || null;
+  }
+
+  function findTeamForm(teamName) {
+    const wanted = normalizeTeamName(teamName);
+
+    if (!state.form || typeof state.form !== "object") {
+      return null;
+    }
+
+    for (const [key, value] of Object.entries(state.form)) {
+      const keyNormalized = normalizeTeamName(key);
+      const valueTeam = normalizeTeamName(value?.team);
 
       if (
-        candidate !== null &&
-        candidate !== undefined
+        keyNormalized === wanted ||
+        valueTeam === wanted
       ) {
-
-        const result =
-          extractTeamName(candidate);
-
-        if (result) {
-          return result;
-        }
-
+        return value;
       }
-
     }
 
+    return null;
   }
 
-  return "";
+  function getH2HKey(homeTeam, awayTeam) {
+    const home = normalizeTeamName(homeTeam);
+    const away = normalizeTeamName(awayTeam);
 
-}
-
-
-function normalizeTeamName(value) {
-
-  const raw =
-    extractTeamName(value);
-
-  if (!raw) {
-    return "";
+    return home < away
+      ? `${home}__${away}`
+      : `${away}__${home}`;
   }
 
-  const key =
-    raw.toLowerCase().trim();
+  function findH2H(homeTeam, awayTeam) {
+    const key = getH2HKey(homeTeam, awayTeam);
 
-  return aliases[key] || raw;
-
-}
-
-
-function setStatus(message, type = "") {
-
-  const el =
-    document.getElementById("status");
-
-  el.textContent =
-    message;
-
-  el.className =
-    "status";
-
-  if (type) {
-    el.classList.add(type);
-  }
-
-}
-
-
-function escapeHtml(value) {
-
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-
-}
-
-
-async function fetchWithTimeout(
-  url,
-  options = {},
-  timeoutMs = 10000
-) {
-
-  const controller =
-    new AbortController();
-
-  const timer =
-    setTimeout(
-      () => controller.abort(),
-      timeoutMs
-    );
-
-  try {
-
-    return await fetch(
-      url,
-      {
-        ...options,
-        signal: controller.signal,
-        cache: "no-store"
-      }
-    );
-
-  } finally {
-
-    clearTimeout(timer);
-
-  }
-
-}
-
-
-async function readJson(response) {
-
-  const text =
-    await response.text();
-
-  let data;
-
-  try {
-
-    data =
-      text
-        ? JSON.parse(text)
-        : {};
-
-  } catch {
-
-    throw new Error(
-      `Risposta non JSON dal server (${response.status}).`
-    );
-
-  }
-
-  if (!response.ok) {
-
-    throw new Error(
-      data?.message ||
-      data?.error ||
-      `Errore HTTP ${response.status}`
-    );
-
-  }
-
-  return data;
-
-}
-
-
-function populateTeams() {
-
-  const homeSelect =
-    document.getElementById("homeTeam");
-
-  const awaySelect =
-    document.getElementById("awayTeam");
-
-  if (!homeSelect || !awaySelect) {
-    return;
-  }
-
-  const teams =
-    new Map();
-
-  for (const match of state.matches || []) {
-
-    const homeCandidates = [
-
-      match?.homeTeam,
-      match?.home_team,
-      match?.home,
-      match?.home_name,
-      match?.homeName,
-      match?.home?.name,
-      match?.teams?.home,
-      match?.teams?.home?.name,
-      match?.teams?.home?.team,
-      match?.teams?.home?.team?.name
-
-    ];
-
-    const awayCandidates = [
-
-      match?.awayTeam,
-      match?.away_team,
-      match?.away,
-      match?.away_name,
-      match?.awayName,
-      match?.away?.name,
-      match?.teams?.away,
-      match?.teams?.away?.name,
-      match?.teams?.away?.team,
-      match?.teams?.away?.team?.name
-
-    ];
-
-    let home = "";
-    let away = "";
-
-    for (const candidate of homeCandidates) {
-
-      home =
-        normalizeTeamName(candidate);
-
-      if (home) {
-        break;
-      }
-
+    if (!state.h2h || typeof state.h2h !== "object") {
+      return [];
     }
 
-    for (const candidate of awayCandidates) {
+    return Array.isArray(state.h2h[key])
+      ? state.h2h[key]
+      : [];
+  }
 
-      away =
-        normalizeTeamName(candidate);
+  function getSelectedFormPayload(homeTeam, awayTeam) {
+    const homeForm = findTeamForm(homeTeam);
+    const awayForm = findTeamForm(awayTeam);
 
-      if (away) {
-        break;
-      }
+    const payload = {};
 
+    if (homeForm) {
+      payload[normalizeTeamName(homeTeam)] = homeForm;
     }
 
-    if (home) {
-
-      teams.set(
-        home.toLowerCase(),
-        home
-      );
-
+    if (awayForm) {
+      payload[normalizeTeamName(awayTeam)] = awayForm;
     }
 
-    if (away) {
+    return payload;
+  }
 
-      teams.set(
-        away.toLowerCase(),
+  function getSelectedH2HPayload(homeTeam, awayTeam) {
+    const key = getH2HKey(homeTeam, awayTeam);
+    const matches = findH2H(homeTeam, awayTeam);
+
+    if (!matches.length) {
+      return {};
+    }
+
+    return {
+      [key]: matches
+    };
+  }
+
+  function findDirectXG(match) {
+    if (!match) return null;
+
+    const xg = match.xG;
+
+    if (!xg || typeof xg !== "object") {
+      return null;
+    }
+
+    const home = Number(
+      xg.homeXG ??
+      xg.home ??
+      xg.home_xg ??
+      xg.home_xG
+    );
+
+    const away = Number(
+      xg.awayXG ??
+      xg.away ??
+      xg.away_xg ??
+      xg.away_xG
+    );
+
+    if (
+      Number.isFinite(home) &&
+      Number.isFinite(away)
+    ) {
+      return {
+        home,
         away
-      );
-
+      };
     }
 
+    return null;
   }
 
-  const sortedTeams =
-    [...teams.values()]
-      .sort((a, b) =>
-        a.localeCompare(b, "it")
-      );
+  function getTeamXG(teamName) {
+    const wanted = normalizeTeamName(teamName);
 
-  homeSelect.innerHTML = "";
-  awaySelect.innerHTML = "";
+    if (!state.teamXG || typeof state.teamXG !== "object") {
+      return null;
+    }
 
-  if (!sortedTeams.length) {
+    for (const [key, value] of Object.entries(state.teamXG)) {
+      if (normalizeTeamName(key) === wanted) {
+        return Number(value);
+      }
+    }
 
-    homeSelect.innerHTML =
-      `<option value="">Nessuna squadra trovata</option>`;
-
-    awaySelect.innerHTML =
-      `<option value="">Nessuna squadra trovata</option>`;
-
-    setStatus(
-      "BBD ha restituito le partite ma non riesco a leggere i nomi delle squadre.",
-      "error"
-    );
-
-    console.error(
-      "Formato partite ricevuto:",
-      state.matches
-    );
-
-    return;
-
+    return null;
   }
 
-  for (const team of sortedTeams) {
+  function buildPredictionPayload() {
+    const homeTeam = getElement("homeTeam")?.value?.trim();
+    const awayTeam = getElement("awayTeam")?.value?.trim();
+    const competition = getElement("competition")?.value || "seriea";
 
-    const homeOption =
-      document.createElement("option");
+    const match = findMatch(homeTeam, awayTeam);
 
-    homeOption.value =
-      team;
+    const directXG = findDirectXG(match);
 
-    homeOption.textContent =
-      team;
+    const payload = {
+      homeTeam,
+      awayTeam,
+      competition,
 
-    const awayOption =
-      document.createElement("option");
+      match: match
+        ? {
+            id: match.id,
+            home: match.home,
+            away: match.away,
+            kickoff_utc: match.kickoff_utc,
+            status: match.status,
+            score: match.score,
+            xG: directXG
+          }
+        : null,
 
-    awayOption.value =
-      team;
+      homeXG: directXG?.home ?? getTeamXG(homeTeam),
+      awayXG: directXG?.away ?? getTeamXG(awayTeam),
 
-    awayOption.textContent =
-      team;
+      standings: Array.isArray(state.standings)
+        ? state.standings
+        : [],
 
-    homeSelect.appendChild(
-      homeOption
-    );
+      form: getSelectedFormPayload(
+        homeTeam,
+        awayTeam
+      ),
 
-    awaySelect.appendChild(
-      awayOption
-    );
+      h2h: getSelectedH2HPayload(
+        homeTeam,
+        awayTeam
+      ),
 
+      lineups: Array.isArray(state.lineups)
+        ? state.lineups
+        : [],
+
+      injuries: Array.isArray(state.injuries)
+        ? state.injuries
+        : []
+    };
+
+    return payload;
   }
 
-  homeSelect.value =
-    sortedTeams[0];
+  async function syncData() {
+    const button = getElement("syncButton");
 
-  awaySelect.value =
-    sortedTeams.length > 1
-      ? sortedTeams[1]
-      : sortedTeams[0];
+    hideError();
 
-  console.log(
-    "Squadre caricate:",
-    sortedTeams
-  );
+    if (button) {
+      button.disabled = true;
+    }
 
-  setStatus(
-    `BBD OK · ${state.matches.length} partite · ${sortedTeams.length} squadre disponibili.`,
-    "ok"
-  );
+    setStatus("Sincronizzazione con Big Balls Data...", "loading");
 
-}
-
-
-function renderCoverage() {
-
-  const el =
-    document.getElementById("coverage");
-
-  const coverage =
-    state.syncData?.coverage || {};
-
-  el.innerHTML = `
-
-    <div class="coverage">
-
-      <div class="coverage-item">
-        <strong>
-          ${coverage.matches ?? state.matches.length ?? 0}
-        </strong>
-        <span class="muted small">
-          Partite
-        </span>
-      </div>
-
-      <div class="coverage-item">
-        <strong>
-          ${coverage.standings ?? state.standings.length ?? 0}
-        </strong>
-        <span class="muted small">
-          Classifica
-        </span>
-      </div>
-
-      <div class="coverage-item">
-        <strong>
-          ${coverage.xG ?? 0}
-        </strong>
-        <span class="muted small">
-          xG diretti
-        </span>
-      </div>
-
-      <div class="coverage-item">
-        <strong>
-          ${coverage.teamsWithXG ?? 0}
-        </strong>
-        <span class="muted small">
-          Team xG
-        </span>
-      </div>
-
-      <div class="coverage-item">
-        <strong>
-          ${coverage.lineups ?? state.lineups.length ?? 0}
-        </strong>
-        <span class="muted small">
-          Lineup
-        </span>
-      </div>
-
-    </div>
-
-  `;
-
-}
-
-
-async function syncData() {
-
-  const button =
-    document.getElementById("syncBtn");
-
-  button.disabled = true;
-
-  setStatus(
-    "Sincronizzazione con Big Balls Sports Data in corso..."
-  );
-
-  try {
-
-    const response =
-      await fetchWithTimeout(
+    try {
+      const response = await fetchWithTimeout(
         "/api/sync",
         {
           method: "GET",
@@ -970,780 +1254,630 @@ async function syncData() {
         15000
       );
 
-    const data =
-      await readJson(response);
+      const data = await readJson(response);
 
-    if (!data.ok) {
+      if (!data.ok) {
+        throw new Error(
+          data.message ||
+          data.error ||
+          "Sincronizzazione non riuscita."
+        );
+      }
 
-      throw new Error(
-        data.message ||
-        data.error ||
-        "Sincronizzazione non riuscita."
-      );
-
-    }
-
-    state.matches =
-      Array.isArray(data.matches)
+      state.syncData = data;
+      state.matches = Array.isArray(data.matches)
         ? data.matches
         : [];
 
-    state.standings =
-      Array.isArray(data.standings)
+      state.standings = Array.isArray(data.standings)
         ? data.standings
         : [];
 
-    state.teamXG =
-      data.teamXG &&
-      typeof data.teamXG === "object"
-        ? data.teamXG
-        : {};
+      state.teamXG =
+        data.teamXG &&
+        typeof data.teamXG === "object"
+          ? data.teamXG
+          : {};
 
-    state.lineups =
-      Array.isArray(data.lineups)
+      state.form =
+        data.form &&
+        typeof data.form === "object"
+          ? data.form
+          : {};
+
+      state.h2h =
+        data.h2h &&
+        typeof data.h2h === "object"
+          ? data.h2h
+          : {};
+
+      state.lineups = Array.isArray(data.lineups)
         ? data.lineups
         : [];
 
-    state.syncData =
-      data;
+      state.injuries = Array.isArray(data.injuries)
+        ? data.injuries
+        : [];
 
-    populateTeams();
+      populateTeams();
 
-    renderCoverage();
-
-    if (!state.matches.length) {
+      const coverage = data.coverage || {};
 
       setStatus(
-        "BBD ha risposto ma non ha restituito partite.",
+        `BBD OK · ${coverage.matches ?? state.matches.length} partite · ` +
+        `${coverage.storedFinishedMatches ?? 0} storiche · ` +
+        `${coverage.teamsWithForm ?? 0} squadre con forma · ` +
+        `${coverage.h2hPairs ?? 0} H2H`,
+        "success"
+      );
+
+      hideResults();
+
+    } catch (error) {
+      console.error("SYNC ERROR:", error);
+
+      setStatus(
+        "Errore durante la sincronizzazione.",
         "error"
       );
 
-      return;
-
-    }
-
-    console.log(
-      "SYNC COMPLETATO:",
-      data
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Errore sincronizzazione:",
-      error
-    );
-
-    setStatus(
-      `Errore sincronizzazione: ${error.message}`,
-      "error"
-    );
-
-  } finally {
-
-    button.disabled = false;
-
-  }
-
-}
-
-
-function findSelectedMatch(
-  homeTeam,
-  awayTeam
-) {
-
-  const wantedHome =
-    normalizeTeamName(homeTeam)
-      .toLowerCase();
-
-  const wantedAway =
-    normalizeTeamName(awayTeam)
-      .toLowerCase();
-
-  return (
-    state.matches.find(
-      match => {
-
-        const home =
-          normalizeTeamName(
-            match?.homeTeam ??
-            match?.home_team ??
-            match?.home ??
-            match?.home_name ??
-            match?.home?.name ??
-            match?.teams?.home ??
-            match?.teams?.home?.name
-          ).toLowerCase();
-
-        const away =
-          normalizeTeamName(
-            match?.awayTeam ??
-            match?.away_team ??
-            match?.away ??
-            match?.away_name ??
-            match?.away?.name ??
-            match?.teams?.away ??
-            match?.teams?.away?.name
-          ).toLowerCase();
-
-        return (
-          home === wantedHome &&
-          away === wantedAway
-        );
-
-      }
-    ) || null
-  );
-
-}
-
-
-async function predict() {
-
-  const button =
-    document.getElementById("predictBtn");
-
-  const homeTeam =
-    document.getElementById("homeTeam").value;
-
-  const awayTeam =
-    document.getElementById("awayTeam").value;
-
-  const competition =
-    document.getElementById("competition").value;
-
-  if (!homeTeam || !awayTeam) {
-
-    setStatus(
-      "Seleziona entrambe le squadre.",
-      "error"
-    );
-
-    return;
-
-  }
-
-  if (homeTeam === awayTeam) {
-
-    setStatus(
-      "Casa e ospite devono essere diverse.",
-      "error"
-    );
-
-    return;
-
-  }
-
-  button.disabled = true;
-
-  setStatus(
-    "Calcolo della previsione in corso..."
-  );
-
-  try {
-
-    const match =
-      findSelectedMatch(
-        homeTeam,
-        awayTeam
+      showError(
+        `SYNC ERROR:\n${error?.message || error}`
       );
 
-    const payload = {
-
-      homeTeam,
-
-      awayTeam,
-
-      competition,
-
-      standings:
-        state.standings
-
-    };
-
-    if (match?.xG) {
-
-      payload.match = {
-        xG: match.xG
-      };
-
+    } finally {
+      if (button) {
+        button.disabled = false;
+      }
     }
+  }
 
-    const homeXG =
-      state.teamXG?.[homeTeam];
+  async function predict() {
+    hideError();
 
-    const awayXG =
-      state.teamXG?.[awayTeam];
+    const homeTeam = getElement("homeTeam")?.value?.trim();
+    const awayTeam = getElement("awayTeam")?.value?.trim();
+
+    if (!homeTeam || !awayTeam) {
+      showError(
+        "Seleziona sia la squadra casa sia la squadra ospite."
+      );
+      return;
+    }
 
     if (
-      Number.isFinite(Number(homeXG)) &&
-      Number.isFinite(Number(awayXG))
+      normalizeTeamName(homeTeam) ===
+      normalizeTeamName(awayTeam)
     ) {
-
-      payload.homeXG =
-        Number(homeXG);
-
-      payload.awayXG =
-        Number(awayXG);
-
+      showError(
+        "Le due squadre devono essere diverse."
+      );
+      return;
     }
 
-    console.log(
-      "PAYLOAD PREVISIONE:",
-      payload
+    if (!state.syncData) {
+      showError(
+        "Prima devi sincronizzare i dati BBD."
+      );
+      return;
+    }
+
+    const button = getElement("predictButton");
+
+    if (button) {
+      button.disabled = true;
+    }
+
+    setStatus(
+      `Calcolo previsione: ${homeTeam} - ${awayTeam}...`,
+      "loading"
     );
 
-    const response =
-      await fetchWithTimeout(
+    try {
+      const payload = buildPredictionPayload();
+
+      console.log("PREDICTION PAYLOAD:", payload);
+
+      const response = await fetchWithTimeout(
         "/api/predict",
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json",
             "Accept": "application/json"
           },
-
-          body:
-            JSON.stringify(payload)
-
+          body: JSON.stringify(payload)
         },
         10000
       );
 
-    const data =
-      await readJson(response);
+      const data = await readJson(response);
 
-    if (!data.ok) {
+      if (!data.ok) {
+        throw new Error(
+          data.message ||
+          data.error ||
+          "La previsione non è stata calcolata."
+        );
+      }
 
-      throw new Error(
-        data.message ||
-        data.error ||
-        "Errore nel calcolo della previsione."
+      state.prediction = data;
+
+      renderPrediction(data);
+
+      showResults();
+
+      setStatus(
+        `Previsione calcolata · ${homeTeam} vs ${awayTeam}`,
+        "success"
       );
 
+      window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth"
+      });
+
+    } catch (error) {
+      console.error("PREDICT ERROR:", error);
+
+      setStatus(
+        "Errore durante il calcolo della previsione.",
+        "error"
+      );
+
+      showError(
+        `PREDICT ERROR:\n${error?.message || error}`
+      );
+
+    } finally {
+      if (button) {
+        button.disabled = false;
+      }
+    }
+  }
+
+  function renderPrediction(data) {
+    const expected = data.expectedGoals || {};
+    const inputXG = data.inputXG || {};
+
+    setText(
+      "homeXG",
+      formatXG(
+        expected.home ??
+        inputXG.home
+      )
+    );
+
+    setText(
+      "awayXG",
+      formatXG(
+        expected.away ??
+        inputXG.away
+      )
+    );
+
+    setText(
+      "xgSource",
+      data.xgSource || "Modello multi-fattore"
+    );
+
+    const probabilities =
+      data.probabilities || {};
+
+    setText(
+      "probHome",
+      formatPercent(probabilities.home)
+    );
+
+    setText(
+      "probDraw",
+      formatPercent(probabilities.draw)
+    );
+
+    setText(
+      "probAway",
+      formatPercent(probabilities.away)
+    );
+
+    const doubleChance =
+      data.doubleChance || {};
+
+    setText(
+      "double1X",
+      formatPercent(doubleChance["1X"])
+    );
+
+    setText(
+      "doubleX2",
+      formatPercent(doubleChance["X2"])
+    );
+
+    setText(
+      "double12",
+      formatPercent(doubleChance["12"])
+    );
+
+    const ou =
+      data.overUnder ||
+      data.over_under ||
+      {};
+
+    setText(
+      "over15",
+      formatPercent(
+        ou.over15 ??
+        ou["1.5"]?.over ??
+        ou["O1.5"]
+      )
+    );
+
+    setText(
+      "under15",
+      formatPercent(
+        ou.under15 ??
+        ou["1.5"]?.under ??
+        ou["U1.5"]
+      )
+    );
+
+    setText(
+      "over25",
+      formatPercent(
+        ou.over25 ??
+        ou["2.5"]?.over ??
+        ou["O2.5"]
+      )
+    );
+
+    setText(
+      "under25",
+      formatPercent(
+        ou.under25 ??
+        ou["2.5"]?.under ??
+        ou["U2.5"]
+      )
+    );
+
+    setText(
+      "over35",
+      formatPercent(
+        ou.over35 ??
+        ou["3.5"]?.over ??
+        ou["O3.5"]
+      )
+    );
+
+    setText(
+      "under35",
+      formatPercent(
+        ou.under35 ??
+        ou["3.5"]?.under ??
+        ou["U3.5"]
+      )
+    );
+
+    const btts =
+      data.btts || {};
+
+    setText(
+      "bttsYes",
+      formatPercent(btts.yes)
+    );
+
+    setText(
+      "bttsNo",
+      formatPercent(btts.no)
+    );
+
+    const handicap =
+      data.handicap ||
+      data.handicaps ||
+      {};
+
+    setText(
+      "handicapHomeMinus1",
+      formatPercent(
+        handicap.homeMinus1 ??
+        handicap["-1"]?.home ??
+        handicap.home?.minus1
+      )
+    );
+
+    setText(
+      "handicapHomePlus1",
+      formatPercent(
+        handicap.homePlus1 ??
+        handicap["+1"]?.home ??
+        handicap.home?.plus1
+      )
+    );
+
+    setText(
+      "handicapAwayPlus1",
+      formatPercent(
+        handicap.awayPlus1 ??
+        handicap["+1"]?.away ??
+        handicap.away?.plus1
+      )
+    );
+
+    renderExactScores(
+      data.exactScores ||
+      data.exact_scores ||
+      []
+    );
+
+    renderFairOdds(
+      data.fairOdds ||
+      data.fair_odds ||
+      {}
+    );
+
+    renderFactors(data);
+
+    renderH2H(data);
+
+    setText(
+      "confidence",
+      Number.isFinite(Number(data.confidence))
+        ? `${Number(data.confidence).toFixed(0)}%`
+        : "—"
+    );
+  }
+
+  function renderExactScores(scores) {
+    const container = getElement("exactScores");
+
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (!Array.isArray(scores) || scores.length === 0) {
+      container.innerHTML =
+        '<div class="info">Nessun risultato esatto disponibile.</div>';
+      return;
     }
 
-    state.prediction =
-      data;
+    for (const item of scores.slice(0, 10)) {
+      const card = document.createElement("div");
 
-    renderPrediction();
+      card.className = "score-card";
 
-    setStatus(
-      "Previsione calcolata.",
-      "ok"
-    );
+      const score = document.createElement("div");
+      score.className = "score";
+      score.textContent = item.score || "—";
 
-  } catch (error) {
+      const prob = document.createElement("div");
+      prob.className = "prob";
+      prob.textContent =
+        formatPercent(item.probability);
 
-    console.error(
-      "Errore previsione:",
-      error
-    );
+      card.appendChild(score);
+      card.appendChild(prob);
 
-    setStatus(
-      `Errore previsione: ${error.message}`,
-      "error"
-    );
-
-  } finally {
-
-    button.disabled = false;
-
+      container.appendChild(card);
+    }
   }
 
-}
+  function renderFairOdds(odds) {
+    setText(
+      "fairHome",
+      formatOdds(odds.home)
+    );
 
+    setText(
+      "fairDraw",
+      formatOdds(odds.draw)
+    );
 
-function formatPercent(value) {
+    setText(
+      "fairAway",
+      formatOdds(odds.away)
+    );
 
-  const number =
-    Number(value);
+    setText(
+      "fairOver25",
+      formatOdds(odds.over25)
+    );
 
-  if (!Number.isFinite(number)) {
-    return "—";
+    setText(
+      "fairUnder25",
+      formatOdds(odds.under25)
+    );
+
+    setText(
+      "fairBttsYes",
+      formatOdds(odds.bttsYes)
+    );
   }
 
-  return `${(number * 100).toFixed(1)}%`;
+  function renderFactors(data) {
+    const factors =
+      data.factorsUsed ||
+      data.factors ||
+      {};
 
-}
+    setFactor(
+      "factorDirectXG",
+      Boolean(factors.directXG)
+    );
 
+    setFactor(
+      "factorStandings",
+      Boolean(factors.standings)
+    );
 
-function formatOdd(value) {
+    setFactor(
+      "factorForm",
+      Boolean(factors.form)
+    );
 
-  const number =
-    Number(value);
+    setFactor(
+      "factorHomeAway",
+      Boolean(factors.homeAway)
+    );
 
-  if (
-    !Number.isFinite(number) ||
-    number <= 0
-  ) {
+    setFactor(
+      "factorH2H",
+      Boolean(factors.h2h)
+    );
 
-    return "—";
+    const lineupsUsed =
+      Array.isArray(data.lineups) &&
+      data.lineups.length > 0;
 
+    const injuriesUsed =
+      Array.isArray(data.injuries) &&
+      data.injuries.length > 0;
+
+    setFactor(
+      "factorLineups",
+      lineupsUsed
+    );
+
+    setFactor(
+      "factorInjuries",
+      injuriesUsed
+    );
   }
 
-  return number.toFixed(2);
+  function setFactor(id, used) {
+    const el = getElement(id);
 
-}
+    if (!el) return;
 
+    el.textContent = used
+      ? "✓ Utilizzato"
+      : "— Non disponibile";
 
-function renderPrediction() {
-
-  const data =
-    state.prediction;
-
-  if (!data) {
-    return;
+    el.className =
+      `factor-value ${used ? "yes" : "no"}`;
   }
 
-  const homeTeam =
-    document.getElementById("homeTeam").value;
+  function renderH2H(data) {
+    const container = getElement("h2hSummary");
 
-  const awayTeam =
-    document.getElementById("awayTeam").value;
+    if (!container) return;
 
-  document.getElementById(
-    "predictionTitle"
-  ).textContent =
-    `${homeTeam} - ${awayTeam}`;
+    const h2h = data.h2h;
 
-  document.getElementById(
-    "predictionSource"
-  ).textContent =
-    `Fonte xG: ${data.xgSource || "Fallback model"} · ` +
-    `xG input ${data.inputXG?.home ?? "—"} - ${data.inputXG?.away ?? "—"} · ` +
-    `Goal attesi ${data.expectedGoals?.home ?? "—"} - ${data.expectedGoals?.away ?? "—"}`;
-
-  const confidence =
-    Number(data.confidence);
-
-  document.getElementById(
-    "confidenceBadge"
-  ).textContent =
-    Number.isFinite(confidence)
-      ? `Confidenza ${confidence}%`
-      : "Confidenza —";
-
-
-  /* 1X2 */
-
-  const probabilities =
-    data.probabilities ||
-    data.probability ||
-    {};
-
-  document.getElementById(
-    "probHome"
-  ).textContent =
-    formatPercent(
-      probabilities.home ??
-      probabilities["1"]
-    );
-
-  document.getElementById(
-    "probDraw"
-  ).textContent =
-    formatPercent(
-      probabilities.draw ??
-      probabilities["X"]
-    );
-
-  document.getElementById(
-    "probAway"
-  ).textContent =
-    formatPercent(
-      probabilities.away ??
-      probabilities["2"]
-    );
-
-
-  /* DOPPIA CHANCE */
-
-  const dc =
-    data.doubleChance ||
-    data.double_chance ||
-    {};
-
-  document.getElementById(
-    "prob1X"
-  ).textContent =
-    formatPercent(
-      dc["1X"] ??
-      dc.oneX ??
-      dc.homeOrDraw
-    );
-
-  document.getElementById(
-    "probX2"
-  ).textContent =
-    formatPercent(
-      dc["X2"] ??
-      dc.xTwo ??
-      dc.drawOrAway
-    );
-
-  document.getElementById(
-    "prob12"
-  ).textContent =
-    formatPercent(
-      dc["12"] ??
-      dc.oneTwo ??
-      dc.homeOrAway
-    );
-
-
-  /* OVER / UNDER */
-
-  const ou =
-    data.overUnder ||
-    data.over_under ||
-    {};
-
-  document.getElementById(
-    "over15"
-  ).textContent =
-    formatPercent(
-      ou.over15 ??
-      ou["1.5"]?.over ??
-      ou["O1.5"]
-    );
-
-  document.getElementById(
-    "under15"
-  ).textContent =
-    formatPercent(
-      ou.under15 ??
-      ou["1.5"]?.under ??
-      ou["U1.5"]
-    );
-
-  document.getElementById(
-    "over25"
-  ).textContent =
-    formatPercent(
-      ou.over25 ??
-      ou["2.5"]?.over ??
-      ou["O2.5"]
-    );
-
-  document.getElementById(
-    "under25"
-  ).textContent =
-    formatPercent(
-      ou.under25 ??
-      ou["2.5"]?.under ??
-      ou["U2.5"]
-    );
-
-  document.getElementById(
-    "over35"
-  ).textContent =
-    formatPercent(
-      ou.over35 ??
-      ou["3.5"]?.over ??
-      ou["O3.5"]
-    );
-
-  document.getElementById(
-    "under35"
-  ).textContent =
-    formatPercent(
-      ou.under35 ??
-      ou["3.5"]?.under ??
-      ou["U3.5"]
-    );
-
-
-  /*
-   * HANDICAP
-   *
-   * Il frontend supporta già i campi
-   * che aggiungeremo nell'API.
-   */
-
-  const handicap =
-    data.handicap ||
-    data.handicaps ||
-    {};
-
-  document.getElementById(
-    "handicapHomeMinus1"
-  ).textContent =
-    formatPercent(
-      handicap.homeMinus1 ??
-      handicap["-1"]?.home ??
-      handicap.home?.minus1
-    );
-
-  document.getElementById(
-    "handicapHomePlus1"
-  ).textContent =
-    formatPercent(
-      handicap.homePlus1 ??
-      handicap["+1"]?.home ??
-      handicap.home?.plus1
-    );
-
-  document.getElementById(
-    "handicapAwayPlus1"
-  ).textContent =
-    formatPercent(
-      handicap.awayPlus1 ??
-      handicap["+1"]?.away ??
-      handicap.away?.plus1
-    );
-
-
-  /* BTTS */
-
-  const btts =
-    data.btts ||
-    data.BTTS ||
-    {};
-
-  document.getElementById(
-    "bttsYes"
-  ).textContent =
-    formatPercent(
-      btts.yes ??
-      btts.Yes
-    );
-
-  document.getElementById(
-    "bttsNo"
-  ).textContent =
-    formatPercent(
-      btts.no ??
-      btts.No
-    );
-
-
-  /* GOAL ATTESI */
-
-  const egHome =
-    Number(
-      data.expectedGoals?.home
-    );
-
-  const egAway =
-    Number(
-      data.expectedGoals?.away
-    );
-
-  document.getElementById(
-    "expectedGoals"
-  ).textContent =
-    Number.isFinite(egHome) &&
-    Number.isFinite(egAway)
-      ? `${egHome.toFixed(2)} - ${egAway.toFixed(2)}`
-      : "—";
-
-
-  /* RISULTATI ESATTI */
-
-  const scores =
-    data.exactScores ||
-    data.exact_scores ||
-    [];
-
-  const scoresEl =
-    document.getElementById(
-      "exactScores"
-    );
-
-  scoresEl.innerHTML = "";
-
-  if (
-    Array.isArray(scores) &&
-    scores.length
-  ) {
-
-    for (
-      const item of scores.slice(0, 5)
+    if (
+      !h2h ||
+      h2h.available !== true
     ) {
-
-      const score =
-        item.score ??
-        item.result ??
-        `${item.home ?? "?"}-${item.away ?? "?"}`;
-
-      const probability =
-        item.probability ??
-        item.prob ??
-        item.p;
-
-      const div =
-        document.createElement("div");
-
-      div.className =
-        "score";
-
-      div.innerHTML = `
-
-        <strong>
-          ${escapeHtml(score)}
-        </strong>
-
-        <span class="muted small">
-          ${formatPercent(probability)}
-        </span>
-
-      `;
-
-      scoresEl.appendChild(div);
-
+      container.textContent =
+        "Nessun H2H disponibile per questa partita.";
+      return;
     }
 
-  } else {
+    const matches =
+      Number(h2h.matches) || 0;
 
-    scoresEl.innerHTML =
-      `<div class="muted small">
-        Nessun risultato esatto disponibile.
-      </div>`;
+    const avgHome =
+      Number(h2h.averageHomeGoals);
 
+    const avgAway =
+      Number(h2h.averageAwayGoals);
+
+    const homeText =
+      Number.isFinite(avgHome)
+        ? avgHome.toFixed(2)
+        : "—";
+
+    const awayText =
+      Number.isFinite(avgAway)
+        ? avgAway.toFixed(2)
+        : "—";
+
+    container.innerHTML = `
+      <strong>${matches}</strong> precedenti utilizzati.
+      Media gol nella prospettiva della partita:
+      <strong>${homeText}</strong> casa /
+      <strong>${awayText}</strong> ospite.
+    `;
   }
 
+  function setupEvents() {
+    getElement("syncButton")
+      ?.addEventListener("click", syncData);
 
-  /* FAIR ODDS */
+    getElement("predictButton")
+      ?.addEventListener("click", predict);
 
-  const odds =
-    data.fairOdds ||
-    data.fair_odds ||
-    {};
+    getElement("homeTeam")
+      ?.addEventListener("change", () => {
+        hideResults();
+        hideError();
 
-  document.getElementById(
-    "fairOdds"
-  ).innerHTML = `
+        setStatus(
+          "Squadra casa selezionata. Premi Calcola previsione.",
+          ""
+        );
+      });
 
-    Casa:
-    <strong>
-      ${formatOdd(
-        odds.home ??
-        odds["1"]
-      )}
-    </strong>
+    getElement("awayTeam")
+      ?.addEventListener("change", () => {
+        hideResults();
+        hideError();
 
-    &nbsp; · &nbsp;
+        setStatus(
+          "Squadra ospite selezionata. Premi Calcola previsione.",
+          ""
+        );
+      });
+  }
 
-    Pareggio:
-    <strong>
-      ${formatOdd(
-        odds.draw ??
-        odds["X"]
-      )}
-    </strong>
+  function setupGlobalErrors() {
+    window.addEventListener("error", event => {
+      console.error("GLOBAL ERROR:", event.error || event.message);
 
-    &nbsp; · &nbsp;
+      showError(
+        `Errore JavaScript:\n${event.message || "Errore sconosciuto"}`
+      );
+    });
 
-    Ospite:
-    <strong>
-      ${formatOdd(
-        odds.away ??
-        odds["2"]
-      )}
-    </strong>
+    window.addEventListener(
+      "unhandledrejection",
+      event => {
+        console.error(
+          "UNHANDLED PROMISE:",
+          event.reason
+        );
 
-  `;
-
-
-  document
-    .getElementById(
-      "predictionCard"
-    )
-    .classList.remove("hidden");
-
-}
-
-
-function setupEvents() {
-
-  document
-    .getElementById("syncBtn")
-    .addEventListener(
-      "click",
-      syncData
-    );
-
-  document
-    .getElementById("predictBtn")
-    .addEventListener(
-      "click",
-      predict
-    );
-
-  document
-    .getElementById("homeTeam")
-    .addEventListener(
-      "change",
-      () => {
-
-        document
-          .getElementById(
-            "predictionCard"
-          )
-          .classList.add("hidden");
-
+        showError(
+          `Errore applicazione:\n${
+            event.reason?.message ||
+            event.reason ||
+            "Errore sconosciuto"
+          }`
+        );
       }
     );
-
-  document
-    .getElementById("awayTeam")
-    .addEventListener(
-      "change",
-      () => {
-
-        document
-          .getElementById(
-            "predictionCard"
-          )
-          .classList.add("hidden");
-
-      }
-    );
-
-}
-
-
-window.addEventListener(
-  "error",
-  event => {
-
-    console.error(
-      "Errore JavaScript:",
-      event.error ||
-      event.message
-    );
-
   }
-);
 
+  function init() {
+    try {
+      setupGlobalErrors();
+      setupEvents();
+      populateTeams();
 
-window.addEventListener(
-  "unhandledrejection",
-  event => {
+      setStatus(
+        "Pronto. Premi «Sincronizza BBD».",
+        ""
+      );
 
-    console.error(
-      "Promise non gestita:",
-      event.reason
-    );
+    } catch (error) {
+      console.error("INIT ERROR:", error);
 
+      showError(
+        `Errore inizializzazione:\n${
+          error?.message || error
+        }`
+      );
+    }
   }
-);
 
-
-function init() {
-
-  setupEvents();
-
-  renderCoverage();
-
-}
-
-
-init();
-
+  init();
 </script>
 
 </body>
