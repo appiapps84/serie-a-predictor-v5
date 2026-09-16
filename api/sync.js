@@ -4,14 +4,8 @@ const SPORT = "football";
 
 const TIMEOUT = 10000;
 
-// Numero massimo di partite storiche da scaricare
 const HISTORICAL_MATCH_LIMIT = 100;
-
-// Numero massimo di partite storiche per cui chiedere gli xG.
-// Manteniamo il consumo API sotto controllo.
 const HISTORICAL_DETAIL_LIMIT = 20;
-
-// Numero massimo di partite future per cui proviamo lineups/stats.
 const FUTURE_DETAIL_LIMIT = 20;
 
 function getApiKey() {
@@ -150,6 +144,7 @@ function normalizeMatch(match) {
     score?.home,
     score?.home_score,
     score?.homeScore,
+    score?.value?.home,
     match.homeScore,
     match.home_score
   );
@@ -158,6 +153,7 @@ function normalizeMatch(match) {
     score?.away,
     score?.away_score,
     score?.awayScore,
+    score?.value?.away,
     match.awayScore,
     match.away_score
   );
@@ -219,26 +215,38 @@ function isCompletedMatch(match) {
 }
 
 /**
- * Cerca xG in diversi formati possibili.
- *
- * Big Balls Data documenta il campo xG come match stat.
- * Manteniamo comunque il parser tollerante per eventuali
- * variazioni dell'envelope.
+ * Normalizza una stringa per poter riconoscere
+ * nomi come "xG", "xg", "expected_goals", ecc.
  */
-function extractTeamXG(statsPayload, homeTeam, awayTeam) {
-  if (!statsPayload) return null;
+function normalizeKey(key) {
+  return String(key)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
 
-  const candidates = [];
+/**
+ * Cerca ricorsivamente tutti i campi xG.
+ *
+ * Questa funzione è volutamente molto permissiva perché
+ * l'endpoint BBS può contenere gli xG dentro diversi
+ * livelli dell'oggetto stats.
+ */
+function findXGValues(payload) {
+  const found = [];
 
-  function collect(value, depth = 0) {
-    if (value === null || value === undefined || depth > 6) {
+  function walk(value, path = [], depth = 0) {
+    if (value === null || value === undefined) {
+      return;
+    }
+
+    if (depth > 10) {
       return;
     }
 
     if (Array.isArray(value)) {
-      for (const item of value) {
-        collect(item, depth + 1);
-      }
+      value.forEach((item, index) => {
+        walk(item, [...path, index], depth + 1);
+      });
 
       return;
     }
@@ -247,112 +255,206 @@ function extractTeamXG(statsPayload, homeTeam, awayTeam) {
       return;
     }
 
-    candidates.push(value);
+    for (const [key, child] of Object.entries(value)) {
+      const normalized = normalizeKey(key);
 
-    for (const child of Object.values(value)) {
-      if (child && typeof child === "object") {
-        collect(child, depth + 1);
+      if (
+        normalized === "xg" ||
+        normalized === "expectedgoals" ||
+        normalized === "expectedgoalsfor" ||
+        normalized === "expectedgoalsagainst"
+      ) {
+        const number = toNumber(child);
+
+        if (number !== null) {
+          found.push({
+            key,
+            value: number,
+            path: [...path, key],
+          });
+        }
       }
+
+      walk(child, [...path, key], depth + 1);
     }
   }
 
-  collect(statsPayload);
+  walk(payload);
+
+  return found;
+}
+
+/**
+ * Cerca di capire a quale squadra appartiene ogni xG.
+ *
+ * Gestisce:
+ *   home / away
+ *   home_team / away_team
+ *   team.name
+ *   name
+ *   label
+ *   side
+ */
+function extractTeamXG(statsPayload, homeTeam, awayTeam) {
+  if (!statsPayload) {
+    return null;
+  }
+
+  const direct = findXGValues(statsPayload);
+
+  if (!direct.length) {
+    return null;
+  }
 
   let homeXG = null;
   let awayXG = null;
 
-  for (const obj of candidates) {
-    const objHome =
-      obj.home ||
-      obj.homeTeam ||
-      obj.home_team ||
-      obj.homeStats ||
-      obj.home_stats;
-
-    const objAway =
-      obj.away ||
-      obj.awayTeam ||
-      obj.away_team ||
-      obj.awayStats ||
-      obj.away_stats;
-
-    if (objHome && typeof objHome === "object") {
-      homeXG = firstNumber(
-        homeXG,
-        objHome.xg,
-        objHome.xG,
-        objHome.expected_goals,
-        objHome.expectedGoals,
-        objHome.expected_goals_for,
-        objHome.expectedGoalsFor
-      );
+  /**
+   * Prima cerchiamo gli oggetti che contengono direttamente
+   * un xG e informazioni sulla squadra/lato.
+   */
+  function scan(value, context = {}) {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value !== "object"
+    ) {
+      return;
     }
 
-    if (objAway && typeof objAway === "object") {
-      awayXG = firstNumber(
-        awayXG,
-        objAway.xg,
-        objAway.xG,
-        objAway.expected_goals,
-        objAway.expectedGoals,
-        objAway.expected_goals_for,
-        objAway.expectedGoalsFor
-      );
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        scan(item, context);
+      }
+
+      return;
     }
 
-    homeXG = firstNumber(
-      homeXG,
-      obj.home_xg,
-      obj.homeXG,
-      obj.home_expected_goals,
-      obj.homeExpectedGoals,
-      obj.xg_home,
-      obj.xGHome
+    const localContext = {
+      ...context,
+      ...value,
+    };
+
+    const localHome =
+      localContext.home ||
+      localContext.home_team ||
+      localContext.homeTeam;
+
+    const localAway =
+      localContext.away ||
+      localContext.away_team ||
+      localContext.awayTeam;
+
+    const localTeam =
+      localContext.team ||
+      localContext.team_name ||
+      localContext.teamName ||
+      localContext.name;
+
+    const side = String(
+      localContext.side ||
+      localContext.location ||
+      localContext.homeAway ||
+      ""
+    ).toLowerCase();
+
+    const xg = firstNumber(
+      localContext.xg,
+      localContext.xG,
+      localContext.expected_goals,
+      localContext.expectedGoals,
+      localContext.expected_goals_for,
+      localContext.expectedGoalsFor
     );
 
-    awayXG = firstNumber(
-      awayXG,
-      obj.away_xg,
-      obj.awayXG,
-      obj.away_expected_goals,
-      obj.awayExpectedGoals,
-      obj.xg_away,
-      obj.xGAway
-    );
+    if (xg !== null) {
+      const teamText = String(localTeam || "").toLowerCase();
+
+      if (
+        side === "home" ||
+        side === "h" ||
+        teamText === String(homeTeam || "").toLowerCase() ||
+        teamText.includes(String(homeTeam || "").toLowerCase())
+      ) {
+        homeXG = xg;
+      }
+
+      if (
+        side === "away" ||
+        side === "a" ||
+        teamText === String(awayTeam || "").toLowerCase() ||
+        teamText.includes(String(awayTeam || "").toLowerCase())
+      ) {
+        awayXG = xg;
+      }
+    }
+
+    /**
+     * Caso classico:
+     *
+     * {
+     *   home: { xg: 1.5 },
+     *   away: { xg: 0.8 }
+     * }
+     */
+    if (localHome && typeof localHome === "object") {
+      const value = firstNumber(
+        localHome.xg,
+        localHome.xG,
+        localHome.expected_goals,
+        localHome.expectedGoals
+      );
+
+      if (value !== null) {
+        homeXG = value;
+      }
+    }
+
+    if (localAway && typeof localAway === "object") {
+      const value = firstNumber(
+        localAway.xg,
+        localAway.xG,
+        localAway.expected_goals,
+        localAway.expectedGoals
+      );
+
+      if (value !== null) {
+        awayXG = value;
+      }
+    }
+
+    for (const child of Object.values(value)) {
+      if (child && typeof child === "object") {
+        scan(child, localContext);
+      }
+    }
   }
 
+  scan(statsPayload);
+
   /**
-   * Alcuni envelope possono esporre direttamente:
-   * {
-   *   home: { xg: ... },
-   *   away: { xg: ... }
-   * }
+   * Se abbiamo trovato esattamente due xG ma non siamo riusciti
+   * ad associarli alle squadre, assumiamo l'ordine home/away.
+   *
+   * Questo è utile per risposte del tipo:
+   * [
+   *   { xg: 1.72 },
+   *   { xg: 0.84 }
+   * ]
    */
   if (
     homeXG === null &&
     awayXG === null &&
-    statsPayload.data &&
-    typeof statsPayload.data === "object" &&
-    !Array.isArray(statsPayload.data)
+    direct.length >= 2
   ) {
-    const data = statsPayload.data;
-
-    homeXG = firstNumber(
-      data.home?.xg,
-      data.home?.xG,
-      data.home_xg,
-      data.homeXG
-    );
-
-    awayXG = firstNumber(
-      data.away?.xg,
-      data.away?.xG,
-      data.away_xg,
-      data.awayXG
-    );
+    homeXG = direct[0].value;
+    awayXG = direct[1].value;
   }
 
-  if (homeXG === null && awayXG === null) {
+  if (
+    homeXG === null &&
+    awayXG === null
+  ) {
     return null;
   }
 
@@ -364,13 +466,21 @@ function extractTeamXG(statsPayload, homeTeam, awayTeam) {
   };
 }
 
-function addTeamXG(teamXG, team, xgFor, xgAgainst) {
+function addTeamXG(
+  teamXG,
+  team,
+  xgFor,
+  xgAgainst
+) {
   if (!team) return;
 
   const cleanFor = toNumber(xgFor);
   const cleanAgainst = toNumber(xgAgainst);
 
-  if (cleanFor === null && cleanAgainst === null) {
+  if (
+    cleanFor === null &&
+    cleanAgainst === null
+  ) {
     return;
   }
 
@@ -435,7 +545,10 @@ function normalizeLineups(payload) {
     return payload.lineups;
   }
 
-  if (payload.data?.lineups && Array.isArray(payload.data.lineups)) {
+  if (
+    payload.data?.lineups &&
+    Array.isArray(payload.data.lineups)
+  ) {
     return payload.data.lineups;
   }
 
@@ -446,6 +559,7 @@ function formatError(error) {
   return {
     status: error?.status || null,
     message: error?.message || String(error),
+
     body:
       typeof error?.body === "string"
         ? error.body.slice(0, 1000)
@@ -468,7 +582,6 @@ async function getFutureDetails(matches) {
       errors: [],
     };
 
-    // Stats
     try {
       const stats = await bbsFetch(
         `/v1/stored/matches/${encodeURIComponent(
@@ -492,7 +605,6 @@ async function getFutureDetails(matches) {
       });
     }
 
-    // Lineups
     try {
       const lineups = await bbsFetch(
         `/v1/stored/matches/${encodeURIComponent(
@@ -500,7 +612,8 @@ async function getFutureDetails(matches) {
         )}/lineups`
       );
 
-      detail.lineups = normalizeLineups(lineups);
+      detail.lineups =
+        normalizeLineups(lineups);
     } catch (error) {
       detail.errors.push({
         type: "lineups",
@@ -537,14 +650,13 @@ async function getHistoricalXG() {
     };
   }
 
-  const historicalMatches = arrayFrom(historicalPayload)
+  const historicalMatches = arrayFrom(
+    historicalPayload
+  )
     .map(normalizeMatch)
     .filter(Boolean)
     .filter(isCompletedMatch);
 
-  /**
-   * Ordiniamo dalla partita più recente alla più vecchia.
-   */
   historicalMatches.sort((a, b) => {
     const dateA = a.kickoff
       ? new Date(a.kickoff).getTime()
@@ -557,12 +669,14 @@ async function getHistoricalXG() {
     return dateB - dateA;
   });
 
-  const selected = historicalMatches.slice(
-    0,
-    HISTORICAL_DETAIL_LIMIT
-  );
+  const selected =
+    historicalMatches.slice(
+      0,
+      HISTORICAL_DETAIL_LIMIT
+    );
 
   const teamAccumulator = {};
+
   let xGCount = 0;
 
   for (const match of selected) {
@@ -585,7 +699,8 @@ async function getHistoricalXG() {
         diagnostics.push({
           type: "historical_stats",
           matchId: match.id,
-          message: "Stats returned but xG fields were not found",
+          message:
+            "Stats returned but xG fields were not found",
         });
 
         continue;
@@ -625,9 +740,13 @@ async function getHistoricalXG() {
   }
 
   return {
-    teamXG: finalizeTeamXG(teamAccumulator),
+    teamXG:
+      finalizeTeamXG(teamAccumulator),
+
     historicalMatches: selected,
+
     xGCount,
+
     diagnostics,
   };
 }
@@ -660,7 +779,10 @@ async function getCurrentMatches() {
     .filter(Boolean);
 }
 
-function enrichMatches(matches, details) {
+function enrichMatches(
+  matches,
+  details
+) {
   const detailMap = new Map();
 
   for (const detail of details) {
@@ -668,7 +790,8 @@ function enrichMatches(matches, details) {
   }
 
   return matches.map((match) => {
-    const detail = detailMap.get(match.id);
+    const detail =
+      detailMap.get(match.id);
 
     if (!detail) {
       return {
@@ -691,146 +814,134 @@ function enrichMatches(matches, details) {
 
       lineups: detail.lineups,
 
-      detailErrors: detail.errors || [],
+      detailErrors:
+        detail.errors || [],
     };
   });
 }
 
-export default async function handler(req, res) {
-  if (req.method !== "GET" && req.method !== "POST") {
+export default async function handler(
+  req,
+  res
+) {
+  if (
+    req.method !== "GET" &&
+    req.method !== "POST"
+  ) {
     return res.status(405).json({
       ok: false,
       error: "Method not allowed",
     });
   }
 
-  const generatedAt = new Date().toISOString();
+  const generatedAt =
+    new Date().toISOString();
 
   try {
     if (!getApiKey()) {
       return res.status(500).json({
         ok: false,
-        error: "BBS_API_KEY non configurata",
+        error:
+          "BBS_API_KEY non configurata",
       });
     }
 
-    /**
-     * 1. Partite correnti / future
-     */
-    const matches = await getCurrentMatches();
+    const matches =
+      await getCurrentMatches();
 
-    /**
-     * 2. Dettagli delle partite correnti.
-     * Non ci aspettiamo necessariamente xG per partite future.
-     */
-    const futureDetails = await getFutureDetails(matches);
+    const futureDetails =
+      await getFutureDetails(matches);
 
-    /**
-     * 3. Storico + xG delle partite concluse.
-     */
-    const historical = await getHistoricalXG();
+    const historical =
+      await getHistoricalXG();
 
-    /**
-     * 4. Classifica.
-     */
-    const standingsResult = await getStandings();
+    const standingsResult =
+      await getStandings();
 
-    /**
-     * 5. Uniamo i dettagli alle partite correnti.
-     */
-    const enrichedMatches = enrichMatches(
-      matches,
+    const enrichedMatches =
+      enrichMatches(
+        matches,
+        futureDetails
+      );
+
+    const directXGCount =
+      enrichedMatches.filter(
+        (match) =>
+          match.xG &&
+          match.xG.home !== null &&
+          match.xG.away !== null
+      ).length;
+
+    const lineupCount =
+      enrichedMatches.filter(
+        (match) =>
+          Array.isArray(match.lineups) &&
+          match.lineups.length > 0
+      ).length;
+
+    const detailErrors =
       futureDetails
-    );
-
-    /**
-     * xG disponibili direttamente sulle partite correnti.
-     */
-    const directXGCount = enrichedMatches.filter(
-      (match) =>
-        match.xG &&
-        match.xG.home !== null &&
-        match.xG.away !== null
-    ).length;
-
-    /**
-     * Lineups disponibili.
-     */
-    const lineupCount = enrichedMatches.filter(
-      (match) =>
-        Array.isArray(match.lineups) &&
-        match.lineups.length > 0
-    ).length;
-
-    /**
-     * Errori dei dettagli delle partite correnti.
-     */
-    const detailErrors = futureDetails
-      .filter(
-        (detail) =>
-          Array.isArray(detail.errors) &&
-          detail.errors.length > 0
-      )
-      .map((detail) => ({
-        matchId: detail.id,
-        errors: detail.errors,
-      }));
+        .filter(
+          (detail) =>
+            Array.isArray(
+              detail.errors
+            ) &&
+            detail.errors.length > 0
+        )
+        .map((detail) => ({
+          matchId: detail.id,
+          errors: detail.errors,
+        }));
 
     return res.status(200).json({
       ok: true,
 
-      source: "Big Balls Sports Data",
+      source:
+        "Big Balls Sports Data",
 
       league: LEAGUE,
 
       generatedAt,
 
       coverage: {
-        matches: enrichedMatches.length,
+        matches:
+          enrichedMatches.length,
 
-        detailsAttempted: futureDetails.length,
+        detailsAttempted:
+          futureDetails.length,
 
-        /**
-         * Questo conta gli xG storici recuperati.
-         * È il numero che interessa al predictor.
-         */
-        xG: historical.xGCount,
+        xG:
+          historical.xGCount,
 
-        /**
-         * xG presenti direttamente sulle partite future.
-         */
-        directMatchXG: directXGCount,
+        directMatchXG:
+          directXGCount,
 
-        lineups: lineupCount,
+        lineups:
+          lineupCount,
 
-        standings: standingsResult.standings.length,
+        standings:
+          standingsResult
+            .standings.length,
 
         historicalMatches:
-          historical.historicalMatches.length,
+          historical
+            .historicalMatches.length,
 
         teamsWithXG:
-          Object.keys(historical.teamXG).length,
+          Object.keys(
+            historical.teamXG
+          ).length,
       },
 
-      /**
-       * Media xG storica per squadra.
-       *
-       * Esempio:
-       * {
-       *   "Inter Milan": {
-       *     matches: 5,
-       *     xgFor: 1.92,
-       *     xgAgainst: 0.81
-       *   }
-       * }
-       */
-      teamXG: historical.teamXG,
+      teamXG:
+        historical.teamXG,
 
       diagnostics: {
         apiKeyDetected: true,
 
         standingsAvailable:
-          standingsResult.standings.length > 0,
+          standingsResult
+            .standings.length > 0,
 
         standingsError:
           standingsResult.error,
@@ -841,12 +952,17 @@ export default async function handler(req, res) {
           historical.diagnostics,
       },
 
-      matches: enrichedMatches,
+      matches:
+        enrichedMatches,
 
-      standings: standingsResult.standings,
+      standings:
+        standingsResult.standings,
     });
   } catch (error) {
-    console.error("SYNC ERROR", error);
+    console.error(
+      "SYNC ERROR",
+      error
+    );
 
     return res.status(500).json({
       ok: false,
@@ -858,13 +974,18 @@ export default async function handler(req, res) {
       generatedAt,
 
       diagnostics: {
-        apiKeyDetected: Boolean(getApiKey()),
+        apiKeyDetected:
+          Boolean(getApiKey()),
 
-        status: error?.status || null,
+        status:
+          error?.status || null,
 
         body:
           typeof error?.body === "string"
-            ? error.body.slice(0, 1000)
+            ? error.body.slice(
+                0,
+                1000
+              )
             : error?.body || null,
       },
     });
