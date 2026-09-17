@@ -47,7 +47,7 @@ async function fetchJson(url, apiKey, timeoutMs = TIMEOUT) {
 }
 
 /* =========================================================
-   BBD - ESTRAZIONI (difensive: non si sa mai quale campo c'e')
+   BBD - ESTRAZIONI (difensive)
 ========================================================= */
 
 function extractMatches(data) {
@@ -59,7 +59,6 @@ function extractMatches(data) {
 }
 
 function extractStandings(data) {
-  // BBD: data.data.standings[0].rows
   const leagues = data?.data?.standings;
 
   if (!Array.isArray(leagues)) return [];
@@ -134,31 +133,15 @@ function isFinished(match) {
 }
 
 /* =========================================================
-   UNDERSTAT - xG GRATIS (scraping pagina campionato)
+   UNDERSTAT - xG GRATIS (Scraping via Proxy)
 ========================================================= */
 
 function understatSeasonYear() {
-  // stagione "2025" = 2025/26. A settembre siamo nel nuovo anno di stagione.
   const now = new Date();
   return now.getUTCMonth() >= 5 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
-function parseUnderstatJsonVar(html, varName) {
-  const re = new RegExp(`var ${varName} = JSON\\.parse\\('(.+?)'\\);`, "s");
-  const m = html.match(re);
-  if (!m) return null;
-
-  try {
-    // Understat escapa gli apici dentro la stringa JSON
-    const cleaned = m[1].replace(/\\'/g, "'").replace(/\\"/g, '"');
-    return JSON.parse(cleaned);
-  } catch {
-    return null;
-  }
-}
-
 function buildUnderstatStats(datesData) {
-  // datesData: oggetto { matchId: { h:{title}, a:{title}, goals:{h,a}, xG:{h,a}, datetime, ... } }
   const stats = {};
 
   function ensure(team) {
@@ -222,7 +205,6 @@ function buildUnderstatStats(datesData) {
     }
   }
 
-  // medie per partita (chiavi che consuma predict.js)
   const result = {};
 
   for (const [key, t] of Object.entries(stats)) {
@@ -246,28 +228,39 @@ function buildUnderstatStats(datesData) {
 
 async function fetchUnderstatStats() {
   const year = understatSeasonYear();
-  const url = `https://understat.com/league/Serie_A/${year}`;
+  const targetUrl = `https://understat.com/league/Serie_A/${year}`;
+  const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
 
   try {
-    const response = await fetchJson(url, null, 10000);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
 
-    if (!response.ok || typeof response.data?.raw !== "string" && typeof response.data !== "string") {
-      // fetchJson prova a fare JSON.parse: la pagina understat NON e' JSON,
-      // quindi arriva come { raw: "..." }
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+
+    if (!response.ok) {
+      return { available: false, reason: `HTTP Proxy ${response.status}`, year, stats: {} };
     }
 
-    const html = response.data?.raw ?? null;
+    const html = await response.text();
 
     if (!html || html.length < 1000) {
-      return { available: false, reason: `HTTP ${response.status}`, year, stats: {} };
+      return { available: false, reason: "Risposta HTML corta dal proxy", year, stats: {} };
     }
 
-    const datesData = parseUnderstatJsonVar(html, "datesData");
+    // Regex e pulizia esadecimale
+    const match = html.match(/datesData\s*=\s*JSON\.parse\('([^']+)'/);
 
-    if (!datesData) {
-      return { available: false, reason: "datesData non trovato", year, stats: {} };
+    if (!match) {
+      return { available: false, reason: "datesData non trovato nella risposta proxy", year, stats: {} };
     }
 
+    const decoded = match[1]
+      .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\");
+
+    const datesData = JSON.parse(decoded);
     const stats = buildUnderstatStats(datesData);
 
     return {
@@ -279,7 +272,7 @@ async function fetchUnderstatStats() {
   } catch (error) {
     return {
       available: false,
-      reason: error?.name === "AbortError" ? "TIMEOUT" : String(error?.message || error),
+      reason: error?.name === "AbortError" ? "TIMEOUT PROXY" : String(error?.message || error),
       year,
       stats: {}
     };
@@ -337,7 +330,6 @@ function buildFormAndH2H(storedMatches) {
     });
   }
 
-  // FORMA: ultime 10, poi sintesi ultime 5
   const form = {};
 
   for (const [key, team] of Object.entries(history)) {
@@ -389,7 +381,6 @@ function buildFormAndH2H(storedMatches) {
     };
   }
 
-  // H2H: max 5 incontri per coppia
   for (const key of Object.keys(h2h)) {
     h2h[key].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
     h2h[key] = h2h[key].slice(0, 5);
@@ -399,7 +390,7 @@ function buildFormAndH2H(storedMatches) {
 }
 
 /* =========================================================
-   SALVATAGGIO RISULTATI SU SUPABASE (batch, non bloccante)
+   SALVATAGGIO SUPABASE
 ========================================================= */
 
 async function saveResultsToSupabase(storedMatches) {
@@ -431,7 +422,6 @@ async function saveResultsToSupabase(storedMatches) {
 
   if (rows.length === 0) return { saved: 0, skipped: "no_rows" };
 
-  // upsert a blocchi di 100 (V5 faceva 200 chiamate singole: lentissimo)
   let saved = 0;
 
   for (let i = 0; i < rows.length; i += 100) {
@@ -470,13 +460,8 @@ export default async function handler(req, res) {
 
   const startedAt = Date.now();
 
-  // =========================================================
-  // 1. TUTTE LE FONTI IN PARALLELO (V5 le faceva sequenziali)
-  // =========================================================
-
-  const storedUrl =
-    `${BBS_BASE}/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}` +
-    `&status=finished&limit=${STORED_MATCH_LIMIT}&sort=desc`; // FIX V5: sort=desc
+  // URL BBD pulito (senza status/sort che causano 400)
+  const storedUrl = `${BBS_BASE}/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&limit=${STORED_MATCH_LIMIT}`;
 
   const [matchesRes, standingsRes, storedRes, understat] = await Promise.allSettled([
     fetchJson(`${BBS_BASE}/v1/matches?sport=${SPORT}&league=${LEAGUE}`, apiKey),
@@ -485,7 +470,6 @@ export default async function handler(req, res) {
     fetchUnderstatStats()
   ]);
 
-  // ---- partite correnti: se fallisce, tutto fallisce
   if (matchesRes.status === "rejected" || !matchesRes.value.ok) {
     const r = matchesRes.status === "rejected" ? null : matchesRes.value;
     return res.status(502).json({
@@ -498,13 +482,11 @@ export default async function handler(req, res) {
 
   const matches = extractMatches(matchesRes.value.data);
 
-  // ---- classifica (opzionale: se fallisce, il modello va avanti senza)
   const standings =
     standingsRes.status === "fulfilled" && standingsRes.value.ok
       ? extractStandings(standingsRes.value.data)
       : [];
 
-  // ---- storico (opzionale)
   const storedMatches =
     storedRes.status === "fulfilled" && storedRes.value.ok
       ? extractMatches(storedRes.value.data)
@@ -515,15 +497,7 @@ export default async function handler(req, res) {
     .filter(Boolean)
     .sort();
 
-  // =========================================================
-  // 2. FORMA + H2H
-  // =========================================================
-
   const { form, h2h } = buildFormAndH2H(storedMatches);
-
-  // =========================================================
-  // 3. XG DIRETTO dalle partite BBD (se il piano li include)
-  // =========================================================
 
   const matchXG = {};
 
@@ -541,11 +515,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // =========================================================
-  // 4. teamXG (compatibilita' frontend: NUMERI, non oggetti)
-  //    media xG fatta per partita da Understat
-  // =========================================================
-
   const under = understat.status === "fulfilled" ? understat.value : { available: false, stats: {} };
   const teamXG = {};
 
@@ -554,10 +523,6 @@ export default async function handler(req, res) {
       teamXG[key] = s.xgForPerGame;
     }
   }
-
-  // =========================================================
-  // 5. SALVATAGGIO RISULTATI (non blocca la risposta se lento)
-  // =========================================================
 
   let savedResults = { skipped: true };
 
@@ -571,10 +536,6 @@ export default async function handler(req, res) {
       savedResults = { saved: 0, error: String(error?.message || error) };
     }
   }
-
-  // =========================================================
-  // 6. RISPOSTA (contratto compatibile con V5 + campi nuovi)
-  // =========================================================
 
   return res.status(200).json({
     ok: true,
@@ -597,8 +558,8 @@ export default async function handler(req, res) {
     matches,
     storedMatches,
     standings,
-    teamXG,                    // { nome_normalizzato: numero } <- FIX bug V5
-    understat: under.stats || {},  // dati xG ricchi per il modello
+    teamXG,
+    understat: under.stats || {},
     form,
     h2h,
     lineups: [],
