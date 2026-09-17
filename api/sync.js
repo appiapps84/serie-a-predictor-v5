@@ -249,23 +249,27 @@ async function fetchUnderstatStats() {
   const url = `https://understat.com/league/Serie_A/${year}`;
 
   try {
-    const response = await fetchJson(url, null, 10000);
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7"
+      }
+    });
 
-    if (!response.ok || typeof response.data?.raw !== "string" && typeof response.data !== "string") {
-      // fetchJson prova a fare JSON.parse: la pagina understat NON e' JSON,
-      // quindi arriva come { raw: "..." }
+    if (!response.ok) {
+      return { available: false, reason: `HTTP ${response.status}`, year, stats: {} };
     }
 
-    const html = response.data?.raw ?? null;
-
+    const html = await response.text();
     if (!html || html.length < 1000) {
-      return { available: false, reason: `HTTP ${response.status}`, year, stats: {} };
+      return { available: false, reason: "Risposta HTML vuota o troppo corta", year, stats: {} };
     }
 
     const datesData = parseUnderstatJsonVar(html, "datesData");
 
     if (!datesData) {
-      return { available: false, reason: "datesData non trovato", year, stats: {} };
+      return { available: false, reason: "datesData non trovato nella pagina", year, stats: {} };
     }
 
     const stats = buildUnderstatStats(datesData);
