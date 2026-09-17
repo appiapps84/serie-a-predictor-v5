@@ -9,33 +9,6 @@ const TIMEOUT = 9000;
 const STORED_MATCH_LIMIT = 300;
 
 /* =========================================================
-   MAPPATURA SQUADRE UNDERSTAT
-========================================================= */
-
-const UNDERSTAT_TEAM_MAP = {
-  fiorentina: "Fiorentina",
-  inter: "Inter",
-  milan: "Milan",
-  juventus: "Juventus",
-  napoli: "Napoli",
-  lazio: "Lazio",
-  roma: "Roma",
-  atalanta: "Atalanta",
-  torino: "Torino",
-  bologna: "Bologna",
-  udinese: "Udinese",
-  verona: "Hellas_Verona",
-  empoli: "Empoli",
-  monza: "Monza",
-  lecce: "Lecce",
-  cagliari: "Cagliari",
-  parma: "Parma",
-  como: "Como",
-  venezia: "Venezia",
-  genoa: "Genoa"
-};
-
-/* =========================================================
    FETCH HELPERS
 ========================================================= */
 
@@ -74,7 +47,7 @@ async function fetchJson(url, apiKey, timeoutMs = TIMEOUT) {
 }
 
 /* =========================================================
-   BBD - ESTRAZIONI (difensive)
+   BBD - ESTRAZIONI (difensive: non si sa mai quale campo c'e')
 ========================================================= */
 
 function extractMatches(data) {
@@ -86,6 +59,7 @@ function extractMatches(data) {
 }
 
 function extractStandings(data) {
+  // BBD: data.data.standings[0].rows
   const leagues = data?.data?.standings;
 
   if (!Array.isArray(leagues)) return [];
@@ -160,102 +134,156 @@ function isFinished(match) {
 }
 
 /* =========================================================
-   UNDERSTAT - SCRAPING ON-DEMAND SINGOLA SQUADRA
+   UNDERSTAT - xG GRATIS (scraping pagina campionato)
 ========================================================= */
 
 function understatSeasonYear() {
+  // stagione "2025" = 2025/26. A settembre siamo nel nuovo anno di stagione.
   const now = new Date();
   return now.getUTCMonth() >= 5 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
-async function fetchSingleTeamXG(teamName, year) {
-  const normKey = normalizeTeamName(teamName);
-  const understatName = UNDERSTAT_TEAM_MAP[normKey] || teamName;
-
-  const targetUrl = `https://understat.com/team/${encodeURIComponent(understatName)}/${year}`;
-  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+function parseUnderstatJsonVar(html, varName) {
+  const re = new RegExp(`var ${varName} = JSON\\.parse\\('(.+?)'\\);`, "s");
+  const m = html.match(re);
+  if (!m) return null;
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-
-    const response = await fetch(proxyUrl, { signal: controller.signal });
-    clearTimeout(timer);
-
-    if (!response.ok) return null;
-
-    const html = await response.text();
-    const match = html.match(/datesData\s*=\s*JSON\.parse\('([^']+)'/);
-
-    if (!match) return null;
-
-    const decoded = match[1]
-      .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-      .replace(/\\"/g, '"')
-      .replace(/\\\\/g, "\\");
-
-    const matches = JSON.parse(decoded);
-
-    let xG = 0;
-    let xGA = 0;
-    let played = 0;
-
-    for (const m of matches) {
-      if (!m.isResult) continue;
-
-      const isHome = m.h.title.toLowerCase().includes(understatName.toLowerCase());
-      const homeXG = Number(m.xG?.h ?? 0);
-      const awayXG = Number(m.xG?.a ?? 0);
-
-      if (isHome) {
-        xG += homeXG;
-        xGA += awayXG;
-      } else {
-        xG += awayXG;
-        xGA += homeXG;
-      }
-      played++;
-    }
-
-    if (played === 0) return null;
-
-    return {
-      team: teamName,
-      normKey,
-      played,
-      xgForPerGame: Number((xG / played).toFixed(3)),
-      xgAgainstPerGame: Number((xGA / played).toFixed(3))
-    };
-  } catch (error) {
+    // Understat escapa gli apici dentro la stringa JSON
+    const cleaned = m[1].replace(/\\'/g, "'").replace(/\\"/g, '"');
+    return JSON.parse(cleaned);
+  } catch {
     return null;
   }
 }
 
-async function fetchOnDemandXG(teamsQuery) {
-  const year = understatSeasonYear();
-  const teams = teamsQuery.split(",").map((t) => t.trim()).filter(Boolean);
-
-  if (teams.length === 0) return { available: false, stats: {} };
-
-  const results = await Promise.all(teams.map((team) => fetchSingleTeamXG(team, year)));
-
+function buildUnderstatStats(datesData) {
+  // datesData: oggetto { matchId: { h:{title}, a:{title}, goals:{h,a}, xG:{h,a}, datetime, ... } }
   const stats = {};
-  for (const res of results) {
-    if (res && res.normKey) {
-      stats[res.normKey] = {
-        team: res.team,
-        played: res.played,
-        xgForPerGame: res.xgForPerGame,
-        xgAgainstPerGame: res.xgAgainstPerGame
+
+  function ensure(team) {
+    const key = normalizeTeamName(team);
+    if (!key) return null;
+    if (!stats[key]) {
+      stats[key] = {
+        team: String(team).trim(),
+        played: 0,
+        xgFor: 0,
+        xgAgainst: 0,
+        scored: 0,
+        conceded: 0,
+        homePlayed: 0,
+        homeXgFor: 0,
+        awayPlayed: 0,
+        awayXgFor: 0,
+        matchesWithXg: 0
       };
+    }
+    return stats[key];
+  }
+
+  const matches = Object.values(datesData || {});
+
+  for (const m of matches) {
+    const homeName = m?.h?.title ?? m?.home_team ?? null;
+    const awayName = m?.a?.title ?? m?.away_team ?? null;
+    const homeGoals = Number(m?.goals?.h ?? m?.goals?.home);
+    const awayGoals = Number(m?.goals?.a ?? m?.goals?.away);
+    const homeXG = Number(m?.xG?.h ?? m?.xG?.home);
+    const awayXG = Number(m?.xG?.a ?? m?.xG?.away);
+
+    if (!homeName || !awayName) continue;
+    if (!Number.isFinite(homeGoals) || !Number.isFinite(awayGoals)) continue;
+
+    const home = ensure(homeName);
+    const away = ensure(awayName);
+    if (!home || !away) continue;
+
+    home.played += 1;
+    away.played += 1;
+    home.scored += homeGoals;
+    home.conceded += awayGoals;
+    away.scored += awayGoals;
+    away.conceded += homeGoals;
+    home.homePlayed += 1;
+    away.awayPlayed += 1;
+
+    const hasXG = Number.isFinite(homeXG) && Number.isFinite(awayXG);
+
+    if (hasXG) {
+      home.matchesWithXg += 1;
+      away.matchesWithXg += 1;
+      home.xgFor += homeXG;
+      home.xgAgainst += awayXG;
+      away.xgFor += awayXG;
+      away.xgAgainst += homeXG;
+      home.homeXgFor += homeXG;
+      away.awayXgFor += awayXG;
     }
   }
 
-  return {
-    available: Object.keys(stats).length > 0,
-    year,
-    stats
-  };
+  // medie per partita (chiavi che consuma predict.js)
+  const result = {};
+
+  for (const [key, t] of Object.entries(stats)) {
+    if (t.played === 0) continue;
+
+    result[key] = {
+      team: t.team,
+      played: t.played,
+      xgForPerGame: t.matchesWithXg > 0 ? Number((t.xgFor / t.matchesWithXg).toFixed(3)) : null,
+      xgAgainstPerGame: t.matchesWithXg > 0 ? Number((t.xgAgainst / t.matchesWithXg).toFixed(3)) : null,
+      scoredPerGame: Number((t.scored / t.played).toFixed(3)),
+      concededPerGame: Number((t.conceded / t.played).toFixed(3)),
+      homeXgForPerGame: t.homePlayed > 0 ? Number((t.homeXgFor / Math.max(1, t.homePlayed)).toFixed(3)) : null,
+      awayXgForPerGame: t.awayPlayed > 0 ? Number((t.awayXgFor / Math.max(1, t.awayPlayed)).toFixed(3)) : null,
+      matchesWithXg: t.matchesWithXg
+    };
+  }
+
+  return result;
+}
+
+async function fetchUnderstatStats() {
+  const year = understatSeasonYear();
+  const url = `https://understat.com/league/Serie_A/${year}`;
+
+  try {
+    const response = await fetchJson(url, null, 10000);
+
+    if (!response.ok || typeof response.data?.raw !== "string" && typeof response.data !== "string") {
+      // fetchJson prova a fare JSON.parse: la pagina understat NON e' JSON,
+      // quindi arriva come { raw: "..." }
+    }
+
+    const html = response.data?.raw ?? null;
+
+    if (!html || html.length < 1000) {
+      return { available: false, reason: `HTTP ${response.status}`, year, stats: {} };
+    }
+
+    const datesData = parseUnderstatJsonVar(html, "datesData");
+
+    if (!datesData) {
+      return { available: false, reason: "datesData non trovato", year, stats: {} };
+    }
+
+    const stats = buildUnderstatStats(datesData);
+
+    return {
+      available: Object.keys(stats).length > 0,
+      year,
+      stats,
+      teams: Object.keys(stats).length
+    };
+  } catch (error) {
+    return {
+      available: false,
+      reason: error?.name === "AbortError" ? "TIMEOUT" : String(error?.message || error),
+      year,
+      stats: {}
+    };
+  }
 }
 
 /* =========================================================
@@ -309,6 +337,7 @@ function buildFormAndH2H(storedMatches) {
     });
   }
 
+  // FORMA: ultime 10, poi sintesi ultime 5
   const form = {};
 
   for (const [key, team] of Object.entries(history)) {
@@ -360,6 +389,7 @@ function buildFormAndH2H(storedMatches) {
     };
   }
 
+  // H2H: max 5 incontri per coppia
   for (const key of Object.keys(h2h)) {
     h2h[key].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
     h2h[key] = h2h[key].slice(0, 5);
@@ -369,7 +399,7 @@ function buildFormAndH2H(storedMatches) {
 }
 
 /* =========================================================
-   SALVATAGGIO SUPABASE
+   SALVATAGGIO RISULTATI SU SUPABASE (batch, non bloccante)
 ========================================================= */
 
 async function saveResultsToSupabase(storedMatches) {
@@ -401,6 +431,7 @@ async function saveResultsToSupabase(storedMatches) {
 
   if (rows.length === 0) return { saved: 0, skipped: "no_rows" };
 
+  // upsert a blocchi di 100 (V5 faceva 200 chiamate singole: lentissimo)
   let saved = 0;
 
   for (let i = 0; i < rows.length; i += 100) {
@@ -417,7 +448,7 @@ async function saveResultsToSupabase(storedMatches) {
 }
 
 /* =========================================================
-   HANDLER PRINCIPALE
+   HANDLER
 ========================================================= */
 
 export default async function handler(req, res) {
@@ -438,18 +469,23 @@ export default async function handler(req, res) {
   }
 
   const startedAt = Date.now();
-  const teamsQuery = req.query?.teams ?? null;
 
-  // URL BBD Stored pulito
-  const storedUrl = `${BBS_BASE}/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&limit=${STORED_MATCH_LIMIT}`;
+  // =========================================================
+  // 1. TUTTE LE FONTI IN PARALLELO (V5 le faceva sequenziali)
+  // =========================================================
+
+  const storedUrl =
+    `${BBS_BASE}/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}` +
+    `&status=finished&limit=${STORED_MATCH_LIMIT}&sort=desc`; // FIX V5: sort=desc
 
   const [matchesRes, standingsRes, storedRes, understat] = await Promise.allSettled([
     fetchJson(`${BBS_BASE}/v1/matches?sport=${SPORT}&league=${LEAGUE}`, apiKey),
     fetchJson(`${BBS_BASE}/v1/standings?sport=${SPORT}&league=${LEAGUE}`, apiKey),
     fetchJson(storedUrl, apiKey),
-    teamsQuery ? fetchOnDemandXG(teamsQuery) : Promise.resolve({ available: false, stats: {} })
+    fetchUnderstatStats()
   ]);
 
+  // ---- partite correnti: se fallisce, tutto fallisce
   if (matchesRes.status === "rejected" || !matchesRes.value.ok) {
     const r = matchesRes.status === "rejected" ? null : matchesRes.value;
     return res.status(502).json({
@@ -462,11 +498,13 @@ export default async function handler(req, res) {
 
   const matches = extractMatches(matchesRes.value.data);
 
+  // ---- classifica (opzionale: se fallisce, il modello va avanti senza)
   const standings =
     standingsRes.status === "fulfilled" && standingsRes.value.ok
       ? extractStandings(standingsRes.value.data)
       : [];
 
+  // ---- storico (opzionale)
   const storedMatches =
     storedRes.status === "fulfilled" && storedRes.value.ok
       ? extractMatches(storedRes.value.data)
@@ -477,7 +515,36 @@ export default async function handler(req, res) {
     .filter(Boolean)
     .sort();
 
+  // =========================================================
+  // 2. FORMA + H2H
+  // =========================================================
+
   const { form, h2h } = buildFormAndH2H(storedMatches);
+
+  // =========================================================
+  // 3. XG DIRETTO dalle partite BBD (se il piano li include)
+  // =========================================================
+
+  const matchXG = {};
+
+  for (const match of matches) {
+    const id = getMatchId(match);
+    const xg = match?.xG ?? match?.xg ?? null;
+
+    if (!id || !xg || typeof xg !== "object") continue;
+
+    const home = Number(xg.homeXG ?? xg.home_xg ?? xg.home);
+    const away = Number(xg.awayXG ?? xg.away_xg ?? xg.away);
+
+    if (Number.isFinite(home) && Number.isFinite(away) && home >= 0 && away >= 0) {
+      matchXG[id] = { homeXG: home, awayXG: away };
+    }
+  }
+
+  // =========================================================
+  // 4. teamXG (compatibilita' frontend: NUMERI, non oggetti)
+  //    media xG fatta per partita da Understat
+  // =========================================================
 
   const under = understat.status === "fulfilled" ? understat.value : { available: false, stats: {} };
   const teamXG = {};
@@ -487,6 +554,10 @@ export default async function handler(req, res) {
       teamXG[key] = s.xgForPerGame;
     }
   }
+
+  // =========================================================
+  // 5. SALVATAGGIO RISULTATI (non blocca la risposta se lento)
+  // =========================================================
 
   let savedResults = { skipped: true };
 
@@ -501,9 +572,13 @@ export default async function handler(req, res) {
     }
   }
 
+  // =========================================================
+  // 6. RISPOSTA (contratto compatibile con V5 + campi nuovi)
+  // =========================================================
+
   return res.status(200).json({
     ok: true,
-    source: "Big Balls Sports Data + Understat On-Demand",
+    source: "Big Balls Sports Data + Understat",
     league: LEAGUE,
     generatedAt: new Date().toISOString(),
 
@@ -513,7 +588,7 @@ export default async function handler(req, res) {
       standings: standings.length,
       teamsWithForm: Object.keys(form).length,
       h2hPairs: Object.keys(h2h).length,
-      understatTeamsFetched: Object.keys(under.stats || {}).length,
+      understatTeams: Object.keys(under.stats || {}).length,
       understatAvailable: Boolean(under.available),
       lineups: 0,
       injuries: 0
@@ -522,8 +597,8 @@ export default async function handler(req, res) {
     matches,
     storedMatches,
     standings,
-    teamXG,
-    understat: under.stats || {},
+    teamXG,                    // { nome_normalizzato: numero } <- FIX bug V5
+    understat: under.stats || {},  // dati xG ricchi per il modello
     form,
     h2h,
     lineups: [],
@@ -544,11 +619,11 @@ export default async function handler(req, res) {
       understat: {
         available: Boolean(under.available),
         year: under.year ?? null,
-        teamsRequested: teamsQuery,
-        teamsFetched: Object.keys(under.stats || {}).length
+        teams: under.teams ?? 0,
+        note: under.available ? null : (under.reason || "non disponibile")
       },
       supabase: savedResults,
-      requests: teamsQuery ? 4 : 3,
+      requests: 3,
       elapsedMs: Date.now() - startedAt
     }
   });
