@@ -9,6 +9,33 @@ const TIMEOUT = 9000;
 const STORED_MATCH_LIMIT = 300;
 
 /* =========================================================
+   MAPPATURA SQUADRE UNDERSTAT
+========================================================= */
+
+const UNDERSTAT_TEAM_MAP = {
+  fiorentina: "Fiorentina",
+  inter: "Inter",
+  milan: "Milan",
+  juventus: "Juventus",
+  napoli: "Napoli",
+  lazio: "Lazio",
+  roma: "Roma",
+  atalanta: "Atalanta",
+  torino: "Torino",
+  bologna: "Bologna",
+  udinese: "Udinese",
+  verona: "Hellas_Verona",
+  empoli: "Empoli",
+  monza: "Monza",
+  lecce: "Lecce",
+  cagliari: "Cagliari",
+  parma: "Parma",
+  como: "Como",
+  venezia: "Venezia",
+  genoa: "Genoa"
+};
+
+/* =========================================================
    FETCH HELPERS
 ========================================================= */
 
@@ -133,7 +160,7 @@ function isFinished(match) {
 }
 
 /* =========================================================
-   UNDERSTAT - xG GRATIS (Scraping via Proxy)
+   UNDERSTAT - SCRAPING ON-DEMAND SINGOLA SQUADRA
 ========================================================= */
 
 function understatSeasonYear() {
@@ -141,142 +168,94 @@ function understatSeasonYear() {
   return now.getUTCMonth() >= 5 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
-function buildUnderstatStats(datesData) {
-  const stats = {};
+async function fetchSingleTeamXG(teamName, year) {
+  const normKey = normalizeTeamName(teamName);
+  const understatName = UNDERSTAT_TEAM_MAP[normKey] || teamName;
 
-  function ensure(team) {
-    const key = normalizeTeamName(team);
-    if (!key) return null;
-    if (!stats[key]) {
-      stats[key] = {
-        team: String(team).trim(),
-        played: 0,
-        xgFor: 0,
-        xgAgainst: 0,
-        scored: 0,
-        conceded: 0,
-        homePlayed: 0,
-        homeXgFor: 0,
-        awayPlayed: 0,
-        awayXgFor: 0,
-        matchesWithXg: 0
-      };
-    }
-    return stats[key];
-  }
-
-  const matches = Object.values(datesData || {});
-
-  for (const m of matches) {
-    const homeName = m?.h?.title ?? m?.home_team ?? null;
-    const awayName = m?.a?.title ?? m?.away_team ?? null;
-    const homeGoals = Number(m?.goals?.h ?? m?.goals?.home);
-    const awayGoals = Number(m?.goals?.a ?? m?.goals?.away);
-    const homeXG = Number(m?.xG?.h ?? m?.xG?.home);
-    const awayXG = Number(m?.xG?.a ?? m?.xG?.away);
-
-    if (!homeName || !awayName) continue;
-    if (!Number.isFinite(homeGoals) || !Number.isFinite(awayGoals)) continue;
-
-    const home = ensure(homeName);
-    const away = ensure(awayName);
-    if (!home || !away) continue;
-
-    home.played += 1;
-    away.played += 1;
-    home.scored += homeGoals;
-    home.conceded += awayGoals;
-    away.scored += awayGoals;
-    away.conceded += homeGoals;
-    home.homePlayed += 1;
-    away.awayPlayed += 1;
-
-    const hasXG = Number.isFinite(homeXG) && Number.isFinite(awayXG);
-
-    if (hasXG) {
-      home.matchesWithXg += 1;
-      away.matchesWithXg += 1;
-      home.xgFor += homeXG;
-      home.xgAgainst += awayXG;
-      away.xgFor += awayXG;
-      away.xgAgainst += homeXG;
-      home.homeXgFor += homeXG;
-      away.awayXgFor += awayXG;
-    }
-  }
-
-  const result = {};
-
-  for (const [key, t] of Object.entries(stats)) {
-    if (t.played === 0) continue;
-
-    result[key] = {
-      team: t.team,
-      played: t.played,
-      xgForPerGame: t.matchesWithXg > 0 ? Number((t.xgFor / t.matchesWithXg).toFixed(3)) : null,
-      xgAgainstPerGame: t.matchesWithXg > 0 ? Number((t.xgAgainst / t.matchesWithXg).toFixed(3)) : null,
-      scoredPerGame: Number((t.scored / t.played).toFixed(3)),
-      concededPerGame: Number((t.conceded / t.played).toFixed(3)),
-      homeXgForPerGame: t.homePlayed > 0 ? Number((t.homeXgFor / Math.max(1, t.homePlayed)).toFixed(3)) : null,
-      awayXgForPerGame: t.awayPlayed > 0 ? Number((t.awayXgFor / Math.max(1, t.awayPlayed)).toFixed(3)) : null,
-      matchesWithXg: t.matchesWithXg
-    };
-  }
-
-  return result;
-}
-
-async function fetchUnderstatStats() {
-  const year = understatSeasonYear();
-  const targetUrl = `https://understat.com/league/Serie_A/${year}`;
-  const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+  const targetUrl = `https://understat.com/team/${encodeURIComponent(understatName)}/${year}`;
+  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const timer = setTimeout(() => controller.abort(), 6000);
 
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(proxyUrl, { signal: controller.signal });
     clearTimeout(timer);
 
-    if (!response.ok) {
-      return { available: false, reason: `HTTP Proxy ${response.status}`, year, stats: {} };
-    }
+    if (!response.ok) return null;
 
     const html = await response.text();
-
-    if (!html || html.length < 1000) {
-      return { available: false, reason: "Risposta HTML corta dal proxy", year, stats: {} };
-    }
-
-    // Regex e pulizia esadecimale
     const match = html.match(/datesData\s*=\s*JSON\.parse\('([^']+)'/);
 
-    if (!match) {
-      return { available: false, reason: "datesData non trovato nella risposta proxy", year, stats: {} };
-    }
+    if (!match) return null;
 
     const decoded = match[1]
       .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
       .replace(/\\"/g, '"')
       .replace(/\\\\/g, "\\");
 
-    const datesData = JSON.parse(decoded);
-    const stats = buildUnderstatStats(datesData);
+    const matches = JSON.parse(decoded);
+
+    let xG = 0;
+    let xGA = 0;
+    let played = 0;
+
+    for (const m of matches) {
+      if (!m.isResult) continue;
+
+      const isHome = m.h.title.toLowerCase().includes(understatName.toLowerCase());
+      const homeXG = Number(m.xG?.h ?? 0);
+      const awayXG = Number(m.xG?.a ?? 0);
+
+      if (isHome) {
+        xG += homeXG;
+        xGA += awayXG;
+      } else {
+        xG += awayXG;
+        xGA += homeXG;
+      }
+      played++;
+    }
+
+    if (played === 0) return null;
 
     return {
-      available: Object.keys(stats).length > 0,
-      year,
-      stats,
-      teams: Object.keys(stats).length
+      team: teamName,
+      normKey,
+      played,
+      xgForPerGame: Number((xG / played).toFixed(3)),
+      xgAgainstPerGame: Number((xGA / played).toFixed(3))
     };
   } catch (error) {
-    return {
-      available: false,
-      reason: error?.name === "AbortError" ? "TIMEOUT PROXY" : String(error?.message || error),
-      year,
-      stats: {}
-    };
+    return null;
   }
+}
+
+async function fetchOnDemandXG(teamsQuery) {
+  const year = understatSeasonYear();
+  const teams = teamsQuery.split(",").map((t) => t.trim()).filter(Boolean);
+
+  if (teams.length === 0) return { available: false, stats: {} };
+
+  const results = await Promise.all(teams.map((team) => fetchSingleTeamXG(team, year)));
+
+  const stats = {};
+  for (const res of results) {
+    if (res && res.normKey) {
+      stats[res.normKey] = {
+        team: res.team,
+        played: res.played,
+        xgForPerGame: res.xgForPerGame,
+        xgAgainstPerGame: res.xgAgainstPerGame
+      };
+    }
+  }
+
+  return {
+    available: Object.keys(stats).length > 0,
+    year,
+    stats
+  };
 }
 
 /* =========================================================
@@ -438,7 +417,7 @@ async function saveResultsToSupabase(storedMatches) {
 }
 
 /* =========================================================
-   HANDLER
+   HANDLER PRINCIPALE
 ========================================================= */
 
 export default async function handler(req, res) {
@@ -459,15 +438,16 @@ export default async function handler(req, res) {
   }
 
   const startedAt = Date.now();
+  const teamsQuery = req.query?.teams ?? null;
 
-  // URL BBD pulito (senza status/sort che causano 400)
+  // URL BBD Stored pulito
   const storedUrl = `${BBS_BASE}/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&limit=${STORED_MATCH_LIMIT}`;
 
   const [matchesRes, standingsRes, storedRes, understat] = await Promise.allSettled([
     fetchJson(`${BBS_BASE}/v1/matches?sport=${SPORT}&league=${LEAGUE}`, apiKey),
     fetchJson(`${BBS_BASE}/v1/standings?sport=${SPORT}&league=${LEAGUE}`, apiKey),
     fetchJson(storedUrl, apiKey),
-    fetchUnderstatStats()
+    teamsQuery ? fetchOnDemandXG(teamsQuery) : Promise.resolve({ available: false, stats: {} })
   ]);
 
   if (matchesRes.status === "rejected" || !matchesRes.value.ok) {
@@ -499,22 +479,6 @@ export default async function handler(req, res) {
 
   const { form, h2h } = buildFormAndH2H(storedMatches);
 
-  const matchXG = {};
-
-  for (const match of matches) {
-    const id = getMatchId(match);
-    const xg = match?.xG ?? match?.xg ?? null;
-
-    if (!id || !xg || typeof xg !== "object") continue;
-
-    const home = Number(xg.homeXG ?? xg.home_xg ?? xg.home);
-    const away = Number(xg.awayXG ?? xg.away_xg ?? xg.away);
-
-    if (Number.isFinite(home) && Number.isFinite(away) && home >= 0 && away >= 0) {
-      matchXG[id] = { homeXG: home, awayXG: away };
-    }
-  }
-
   const under = understat.status === "fulfilled" ? understat.value : { available: false, stats: {} };
   const teamXG = {};
 
@@ -539,7 +503,7 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
-    source: "Big Balls Sports Data + Understat",
+    source: "Big Balls Sports Data + Understat On-Demand",
     league: LEAGUE,
     generatedAt: new Date().toISOString(),
 
@@ -549,7 +513,7 @@ export default async function handler(req, res) {
       standings: standings.length,
       teamsWithForm: Object.keys(form).length,
       h2hPairs: Object.keys(h2h).length,
-      understatTeams: Object.keys(under.stats || {}).length,
+      understatTeamsFetched: Object.keys(under.stats || {}).length,
       understatAvailable: Boolean(under.available),
       lineups: 0,
       injuries: 0
@@ -580,11 +544,11 @@ export default async function handler(req, res) {
       understat: {
         available: Boolean(under.available),
         year: under.year ?? null,
-        teams: under.teams ?? 0,
-        note: under.available ? null : (under.reason || "non disponibile")
+        teamsRequested: teamsQuery,
+        teamsFetched: Object.keys(under.stats || {}).length
       },
       supabase: savedResults,
-      requests: 3,
+      requests: teamsQuery ? 4 : 3,
       elapsedMs: Date.now() - startedAt
     }
   });
