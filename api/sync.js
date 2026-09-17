@@ -84,18 +84,33 @@ function isFinished(match) {
 }
 
 function parseUnderstatJsonVar(html, varName) {
-  const re = new RegExp(`var\\s+${varName}\\s*=\\s*JSON\\.parse\\((['"])(.+?)\\1\\);?`, "s");
-  const m = html.match(re);
-  if (!m) return null;
+  // Cerca var varName = JSON.parse('...') oppure var varName = {...};
+  const reJsonParse = new RegExp(`var\\s+${varName}\\s*=\\s*JSON\\.parse\\((['"])(.+?)\\1\\);?`, "s");
+  const mJson = html.match(reJsonParse);
 
-  try {
-    let rawStr = m[2];
-    rawStr = rawStr.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-    rawStr = rawStr.replace(/\\'/g, "'").replace(/\\"/g, '"');
-    return JSON.parse(rawStr);
-  } catch (e) {
-    return null;
+  if (mJson) {
+    try {
+      let rawStr = mJson[2];
+      rawStr = rawStr.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+      rawStr = rawStr.replace(/\\'/g, "'").replace(/\\"/g, '"');
+      return JSON.parse(rawStr);
+    } catch (e) {
+      console.error(`Errore parse JSON.parse Understat (${varName}):`, e);
+    }
   }
+
+  // Fallback se la variabile è un oggetto JS letterale
+  const reLiteral = new RegExp(`var\\s+${varName}\\s*=\\s*(\\{.+?\\});\\s*var`, "s");
+  const mLiteral = html.match(reLiteral);
+  if (mLiteral) {
+    try {
+      return JSON.parse(mLiteral[1]);
+    } catch (e) {
+      console.error(`Errore parse Literal Understat (${varName}):`, e);
+    }
+  }
+
+  return null;
 }
 
 function buildUnderstatStats(datesData) {
