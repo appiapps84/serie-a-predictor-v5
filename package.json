@@ -1,0 +1,9 @@
+{
+  "name": "serie-a-predictor-v6",
+  "version": "2.0.0",
+  "description": "Serie A prediction app - BBD + Understat xG",
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.43.0"
+  }
+}
