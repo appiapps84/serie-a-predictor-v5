@@ -5,6 +5,7 @@ const BBS_BASE = "https://api.bigballsdata.com";
 const LEAGUE = "seriea";
 const SPORT = "football";
 const TIMEOUT = 9000;
+const STORED_MATCH_LIMIT = 300;
 
 function authHeaders(apiKey) {
   return {
@@ -84,33 +85,18 @@ function isFinished(match) {
 }
 
 function parseUnderstatJsonVar(html, varName) {
-  // Cerca var varName = JSON.parse('...') oppure var varName = {...};
-  const reJsonParse = new RegExp(`var\\s+${varName}\\s*=\\s*JSON\\.parse\\((['"])(.+?)\\1\\);?`, "s");
-  const mJson = html.match(reJsonParse);
+  const re = new RegExp(`var\\s+${varName}\\s*=\\s*JSON\\.parse\\((['"])(.+?)\\1\\);?`, "s");
+  const m = html.match(re);
+  if (!m) return null;
 
-  if (mJson) {
-    try {
-      let rawStr = mJson[2];
-      rawStr = rawStr.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-      rawStr = rawStr.replace(/\\'/g, "'").replace(/\\"/g, '"');
-      return JSON.parse(rawStr);
-    } catch (e) {
-      console.error(`Errore parse JSON.parse Understat (${varName}):`, e);
-    }
+  try {
+    let rawStr = m[2];
+    rawStr = rawStr.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    rawStr = rawStr.replace(/\\'/g, "'").replace(/\\"/g, '"');
+    return JSON.parse(rawStr);
+  } catch (e) {
+    return null;
   }
-
-  // Fallback se la variabile è un oggetto JS letterale
-  const reLiteral = new RegExp(`var\\s+${varName}\\s*=\\s*(\\{.+?\\});\\s*var`, "s");
-  const mLiteral = html.match(reLiteral);
-  if (mLiteral) {
-    try {
-      return JSON.parse(mLiteral[1]);
-    } catch (e) {
-      console.error(`Errore parse Literal Understat (${varName}):`, e);
-    }
-  }
-
-  return null;
 }
 
 function buildUnderstatStats(datesData) {
@@ -170,7 +156,7 @@ function buildUnderstatStats(datesData) {
 }
 
 async function fetchUnderstatStats() {
-  const year = 2025; // Anno stagione di riferimento
+  const year = 2025;
   const url = `https://understat.com/league/Serie_A/${year}`;
 
   try {
@@ -348,10 +334,12 @@ export default async function handler(req, res) {
   }
 
   const startedAt = Date.now();
+  const storedUrl = `${BBS_BASE}/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&limit=${STORED_MATCH_LIMIT}`;
 
-  const [matchesRes, standingsRes, understat] = await Promise.allSettled([
+  const [matchesRes, standingsRes, storedRes, understat] = await Promise.allSettled([
     fetchJson(`${BBS_BASE}/v1/matches?sport=${SPORT}&league=${LEAGUE}`, apiKey),
     fetchJson(`${BBS_BASE}/v1/standings?sport=${SPORT}&league=${LEAGUE}`, apiKey),
+    fetchJson(storedUrl, apiKey),
     fetchUnderstatStats()
   ]);
 
@@ -368,8 +356,10 @@ export default async function handler(req, res) {
   const matches = extractMatches(matchesRes.value.data);
   const standings = standingsRes.status === "fulfilled" && standingsRes.value.ok ? extractStandings(standingsRes.value.data) : [];
 
-  // Fallback: usa le partite concluse presenti in /v1/matches come storico se /v1/stored/matches fallisce
-  const storedMatches = matches.filter(isFinished);
+  // Prende le partite dall'endpoint stored se ok, altrimenti estrae quelle concluse da matches
+  let storedMatches = storedRes.status === "fulfilled" && storedRes.value.ok 
+    ? extractMatches(storedRes.value.data) 
+    : matches.filter(isFinished);
 
   const storedDates = storedMatches.map(getMatchDate).filter(Boolean).sort();
   const { form, h2h } = buildFormAndH2H(storedMatches);
@@ -421,7 +411,7 @@ export default async function handler(req, res) {
       matches: { status: matchesRes.value.status, count: matches.length },
       standings: { status: standingsRes.status === "fulfilled" ? standingsRes.value.status : "FAILED", available: standings.length > 0 },
       stored: {
-        status: 200,
+        status: storedRes.status === "fulfilled" ? storedRes.value.status : 200,
         count: storedMatches.length,
         oldestDate: storedDates[0] ?? null,
         newestDate: storedDates[storedDates.length - 1] ?? null
@@ -433,7 +423,7 @@ export default async function handler(req, res) {
         note: under.available ? null : (under.reason || "non disponibile")
       },
       supabase: savedResults,
-      requests: 2,
+      requests: 3,
       elapsedMs: Date.now() - startedAt
     }
   });
