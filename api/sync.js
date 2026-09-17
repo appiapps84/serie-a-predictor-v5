@@ -138,26 +138,29 @@ function isFinished(match) {
 ========================================================= */
 
 function understatSeasonYear() {
-  // stagione "2025" = 2025/26. A settembre siamo nel nuovo anno di stagione.
   const now = new Date();
-  return now.getUTCMonth() >= 5 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  // Se siamo tra Gennaio e Luglio si usa l'anno precedente, da Agosto in poi l'anno corrente - 1
+  // Per la stagione 2025/2026 l'URL di Understat richiede 2025
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth(); // 0-based: 7 = Agosto
+  return month < 7 ? year - 1 : year - 1;
 }
 
 function parseUnderstatJsonVar(html, varName) {
-  // Regex per catturare l'assegnazione var varName = JSON.parse('...');
-  const re = new RegExp(`var\\s+${varName}\\s*=\\s*JSON\\.parse\\(['"](.+?)['"]\\);`, "s");
+  // Regex generica per catturare l'assegnazione JSON.parse('...')
+  const re = new RegExp(`var\\s+${varName}\\s*=\\s*JSON\\.parse\\((['"])(.+?)\\1\\);`, "s");
   const m = html.match(re);
   if (!m) return null;
 
   try {
-    // Decodifica le sequenze esadecimali (es. \x20) e gli apici usati nel sorgente Understat
-    let decoded = m[1]
-      .replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-      .replace(/\\'/g, "'")
-      .replace(/\\"/g, '"');
-    return JSON.parse(decoded);
+    let rawStr = m[2];
+    // Decodifica i caratteri esadecimali tipo \x20 o \x7B usati da Understat
+    rawStr = rawStr.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    // Pulisce gli escape degli apici
+    rawStr = rawStr.replace(/\\'/g, "'").replace(/\\"/g, '"');
+    return JSON.parse(rawStr);
   } catch (e) {
-    console.error(`Errore parsing Understat per ${varName}:`, e);
+    console.error(`Errore parse Understat (${varName}):`, e);
     return null;
   }
 }
