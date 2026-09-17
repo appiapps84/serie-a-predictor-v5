@@ -157,14 +157,14 @@ function buildUnderstatStats(datesData) {
 
 async function fetchUnderstatStats() {
   const year = 2025;
+  // Proviamo a scaricare i dati direttamente dalla pagina della squadra o della lega con il nuovo pattern
   const url = `https://understat.com/league/Serie_A/${year}`;
 
   try {
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
 
@@ -173,16 +173,23 @@ async function fetchUnderstatStats() {
     }
 
     const html = await response.text();
-    if (!html || html.length < 1000) {
-      return { available: false, reason: "Risposta HTML troppo corta", year, stats: {} };
+
+    // REGEX SEMPLIFICATA DALLO SCRIPT DI CHATGPT
+    const match = html.match(/datesData\s*=\s*JSON\.parse\('([^']+)'/);
+
+    if (!match) {
+      return { available: false, reason: "datesData non trovato con la nuova regex", year, stats: {} };
     }
 
-    const datesData = parseUnderstatJsonVar(html, "datesData");
-    if (!datesData) {
-      return { available: false, reason: "datesData non trovato", year, stats: {} };
-    }
+    // DECODIFICA ESADECIMALE ESATTA
+    const decoded = match[1]
+      .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\");
 
+    const datesData = JSON.parse(decoded);
     const stats = buildUnderstatStats(datesData);
+
     return {
       available: Object.keys(stats).length > 0,
       year,
@@ -192,7 +199,7 @@ async function fetchUnderstatStats() {
   } catch (error) {
     return {
       available: false,
-      reason: error?.name === "AbortError" ? "TIMEOUT" : String(error?.message || error),
+      reason: error?.message || "Errore durante lo scraping",
       year,
       stats: {}
     };
