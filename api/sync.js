@@ -4,8 +4,13 @@ import { getSupabase } from "./lib/supabase.js";
 const BBS_BASE = "https://api.bigballsdata.com";
 const LEAGUE = "seriea";
 const SPORT = "football";
+
 const TIMEOUT = 9000;
 const STORED_MATCH_LIMIT = 300;
+
+/* =========================================================
+   FETCH HELPERS
+========================================================= */
 
 function authHeaders(apiKey) {
   return {
@@ -27,8 +32,13 @@ async function fetchJson(url, apiKey, timeoutMs = TIMEOUT) {
     });
 
     const text = await response.text();
+
     let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text.slice(0, 300) }; }
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text.slice(0, 300) };
+    }
 
     return { ok: response.ok, status: response.status, data };
   } finally {
@@ -36,41 +46,80 @@ async function fetchJson(url, apiKey, timeoutMs = TIMEOUT) {
   }
 }
 
+/* =========================================================
+   BBD - ESTRAZIONI (difensive: non si sa mai quale campo c'e')
+========================================================= */
+
 function extractMatches(data) {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.matches)) return data.matches;
   if (Array.isArray(data?.fixtures)) return data.fixtures;
   if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.results)) return data.results;
   return [];
 }
 
 function extractStandings(data) {
-  const leagues = data?.data?.standings || data?.standings;
+  // BBD: data.data.standings[0].rows
+  const leagues = data?.data?.standings;
+
   if (!Array.isArray(leagues)) return [];
+
   for (const block of leagues) {
-    if (Array.isArray(block?.rows) && block.rows.length > 0) return block.rows;
+    if (Array.isArray(block?.rows) && block.rows.length > 0) {
+      return block.rows;
+    }
   }
+
   return [];
 }
 
 function getTeamName(match, side) {
   if (side === "home") {
-    return match?.home?.name ?? match?.home_team?.name ?? match?.home_name ?? match?.homeTeam ?? match?.teams?.home?.name ?? "";
+    return (
+      match?.home?.name ??
+      match?.home_team?.name ??
+      match?.home_name ??
+      match?.homeTeam ??
+      match?.teams?.home?.name ??
+      ""
+    );
   }
-  return match?.away?.name ?? match?.away_team?.name ?? match?.away_name ?? match?.awayTeam ?? match?.teams?.away?.name ?? "";
+
+  return (
+    match?.away?.name ??
+    match?.away_team?.name ??
+    match?.away_name ??
+    match?.awayTeam ??
+    match?.teams?.away?.name ??
+    ""
+  );
 }
 
 function getMatchDate(match) {
-  return match?.kickoff_utc ?? match?.kickoffUtc ?? match?.kickoff ?? match?.date ?? match?.start_time ?? match?.startTime ?? null;
+  return (
+    match?.kickoff_utc ??
+    match?.kickoffUtc ??
+    match?.kickoff ??
+    match?.date ??
+    match?.start_time ??
+    match?.startTime ??
+    null
+  );
 }
 
 function getScore(match) {
   const score = match?.score ?? match?.scores ?? null;
   if (!score) return null;
-  const home = Number(score.home ?? score.home_score ?? score.homeScore ?? score.home_goals ?? score.full_time?.home);
-  const away = Number(score.away ?? score.away_score ?? score.awayScore ?? score.away_goals ?? score.full_time?.away);
+
+  const home = Number(
+    score.home ?? score.home_score ?? score.homeScore ?? score.home_goals ?? score.full_time?.home
+  );
+  const away = Number(
+    score.away ?? score.away_score ?? score.awayScore ?? score.away_goals ?? score.full_time?.away
+  );
+
   if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
+
   return { home, away };
 }
 
@@ -84,33 +133,57 @@ function isFinished(match) {
   return Boolean(getScore(match));
 }
 
+/* =========================================================
+   UNDERSTAT - xG GRATIS (scraping pagina campionato)
+========================================================= */
+
+function understatSeasonYear() {
+  // stagione "2025" = 2025/26. A settembre siamo nel nuovo anno di stagione.
+  const now = new Date();
+  return now.getUTCMonth() >= 5 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+}
+
 function parseUnderstatJsonVar(html, varName) {
-  const re = new RegExp(`var\\s+${varName}\\s*=\\s*JSON\\.parse\\((['"])(.+?)\\1\\);?`, "s");
+  const re = new RegExp(`var ${varName} = JSON\\.parse\\('(.+?)'\\);`, "s");
   const m = html.match(re);
   if (!m) return null;
 
   try {
-    let rawStr = m[2];
-    rawStr = rawStr.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-    rawStr = rawStr.replace(/\\'/g, "'").replace(/\\"/g, '"');
-    return JSON.parse(rawStr);
-  } catch (e) {
+    // Understat escapa gli apici dentro la stringa JSON
+    const cleaned = m[1].replace(/\\'/g, "'").replace(/\\"/g, '"');
+    return JSON.parse(cleaned);
+  } catch {
     return null;
   }
 }
 
 function buildUnderstatStats(datesData) {
+  // datesData: oggetto { matchId: { h:{title}, a:{title}, goals:{h,a}, xG:{h,a}, datetime, ... } }
   const stats = {};
+
   function ensure(team) {
     const key = normalizeTeamName(team);
     if (!key) return null;
     if (!stats[key]) {
-      stats[key] = { team: String(team).trim(), played: 0, xgFor: 0, xgAgainst: 0, scored: 0, conceded: 0, homePlayed: 0, homeXgFor: 0, awayPlayed: 0, awayXgFor: 0, matchesWithXg: 0 };
+      stats[key] = {
+        team: String(team).trim(),
+        played: 0,
+        xgFor: 0,
+        xgAgainst: 0,
+        scored: 0,
+        conceded: 0,
+        homePlayed: 0,
+        homeXgFor: 0,
+        awayPlayed: 0,
+        awayXgFor: 0,
+        matchesWithXg: 0
+      };
     }
     return stats[key];
   }
 
   const matches = Object.values(datesData || {});
+
   for (const m of matches) {
     const homeName = m?.h?.title ?? m?.home_team ?? null;
     const awayName = m?.a?.title ?? m?.away_team ?? null;
@@ -119,27 +192,42 @@ function buildUnderstatStats(datesData) {
     const homeXG = Number(m?.xG?.h ?? m?.xG?.home);
     const awayXG = Number(m?.xG?.a ?? m?.xG?.away);
 
-    if (!homeName || !awayName || !Number.isFinite(homeGoals) || !Number.isFinite(awayGoals)) continue;
+    if (!homeName || !awayName) continue;
+    if (!Number.isFinite(homeGoals) || !Number.isFinite(awayGoals)) continue;
+
     const home = ensure(homeName);
     const away = ensure(awayName);
     if (!home || !away) continue;
 
-    home.played += 1; away.played += 1;
-    home.scored += homeGoals; home.conceded += awayGoals;
-    away.scored += awayGoals; away.conceded += homeGoals;
-    home.homePlayed += 1; away.awayPlayed += 1;
+    home.played += 1;
+    away.played += 1;
+    home.scored += homeGoals;
+    home.conceded += awayGoals;
+    away.scored += awayGoals;
+    away.conceded += homeGoals;
+    home.homePlayed += 1;
+    away.awayPlayed += 1;
 
-    if (Number.isFinite(homeXG) && Number.isFinite(awayXG)) {
-      home.matchesWithXg += 1; away.matchesWithXg += 1;
-      home.xgFor += homeXG; home.xgAgainst += awayXG;
-      away.xgFor += awayXG; away.xgAgainst += homeXG;
-      home.homeXgFor += homeXG; away.awayXgFor += awayXG;
+    const hasXG = Number.isFinite(homeXG) && Number.isFinite(awayXG);
+
+    if (hasXG) {
+      home.matchesWithXg += 1;
+      away.matchesWithXg += 1;
+      home.xgFor += homeXG;
+      home.xgAgainst += awayXG;
+      away.xgFor += awayXG;
+      away.xgAgainst += homeXG;
+      home.homeXgFor += homeXG;
+      away.awayXgFor += awayXG;
     }
   }
 
+  // medie per partita (chiavi che consuma predict.js)
   const result = {};
+
   for (const [key, t] of Object.entries(stats)) {
     if (t.played === 0) continue;
+
     result[key] = {
       team: t.team,
       played: t.played,
@@ -152,42 +240,34 @@ function buildUnderstatStats(datesData) {
       matchesWithXg: t.matchesWithXg
     };
   }
+
   return result;
 }
 
 async function fetchUnderstatStats() {
-  const year = 2025;
-  // Proviamo a scaricare i dati direttamente dalla pagina della squadra o della lega con il nuovo pattern
+  const year = understatSeasonYear();
   const url = `https://understat.com/league/Serie_A/${year}`;
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-      }
-    });
+    const response = await fetchJson(url, null, 10000);
 
-    if (!response.ok) {
+    if (!response.ok || typeof response.data?.raw !== "string" && typeof response.data !== "string") {
+      // fetchJson prova a fare JSON.parse: la pagina understat NON e' JSON,
+      // quindi arriva come { raw: "..." }
+    }
+
+    const html = response.data?.raw ?? null;
+
+    if (!html || html.length < 1000) {
       return { available: false, reason: `HTTP ${response.status}`, year, stats: {} };
     }
 
-    const html = await response.text();
+    const datesData = parseUnderstatJsonVar(html, "datesData");
 
-    // REGEX SEMPLIFICATA DALLO SCRIPT DI CHATGPT
-    const match = html.match(/datesData\s*=\s*JSON\.parse\('([^']+)'/);
-
-    if (!match) {
-      return { available: false, reason: "datesData non trovato con la nuova regex", year, stats: {} };
+    if (!datesData) {
+      return { available: false, reason: "datesData non trovato", year, stats: {} };
     }
 
-    // DECODIFICA ESADECIMALE ESATTA
-    const decoded = match[1]
-      .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-      .replace(/\\"/g, '"')
-      .replace(/\\\\/g, "\\");
-
-    const datesData = JSON.parse(decoded);
     const stats = buildUnderstatStats(datesData);
 
     return {
@@ -199,12 +279,16 @@ async function fetchUnderstatStats() {
   } catch (error) {
     return {
       available: false,
-      reason: error?.message || "Errore durante lo scraping",
+      reason: error?.name === "AbortError" ? "TIMEOUT" : String(error?.message || error),
       year,
       stats: {}
     };
   }
 }
+
+/* =========================================================
+   FORMA + H2H dallo storico BBD
+========================================================= */
 
 function buildFormAndH2H(storedMatches) {
   const history = {};
@@ -213,17 +297,21 @@ function buildFormAndH2H(storedMatches) {
   function ensure(team) {
     const key = normalizeTeamName(team);
     if (!key) return null;
-    if (!history[key]) history[key] = { team: String(team).trim(), matches: [] };
+    if (!history[key]) {
+      history[key] = { team: String(team).trim(), matches: [] };
+    }
     return history[key];
   }
 
   for (const match of storedMatches) {
     if (!isFinished(match)) continue;
+
     const homeName = getTeamName(match, "home");
     const awayName = getTeamName(match, "away");
     const score = getScore(match);
 
     if (!homeName || !awayName || !score) continue;
+
     const home = ensure(homeName);
     const away = ensure(awayName);
     if (!home || !away) continue;
@@ -231,23 +319,37 @@ function buildFormAndH2H(storedMatches) {
     const date = getMatchDate(match);
     const matchId = getMatchId(match);
 
-    home.matches.push({ matchId, date, homeTeam: homeName, awayTeam: awayName, homeGoals: score.home, awayGoals: score.away, venue: "home" });
-    away.matches.push({ matchId, date, homeTeam: homeName, awayTeam: awayName, homeGoals: score.home, awayGoals: score.away, venue: "away" });
+    home.matches.push({
+      matchId, date, homeTeam: homeName, awayTeam: awayName,
+      homeGoals: score.home, awayGoals: score.away, venue: "home"
+    });
+
+    away.matches.push({
+      matchId, date, homeTeam: homeName, awayTeam: awayName,
+      homeGoals: score.home, awayGoals: score.away, venue: "away"
+    });
 
     const key = h2hKey(homeName, awayName);
     if (!h2h[key]) h2h[key] = [];
-    h2h[key].push({ matchId, date, homeTeam: homeName, awayTeam: awayName, homeGoals: score.home, awayGoals: score.away });
+    h2h[key].push({
+      matchId, date, homeTeam: homeName, awayTeam: awayName,
+      homeGoals: score.home, awayGoals: score.away
+    });
   }
 
+  // FORMA: ultime 10, poi sintesi ultime 5
   const form = {};
+
   for (const [key, team] of Object.entries(history)) {
     team.matches.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
     const last10 = team.matches.slice(0, 10);
     const last5 = last10.slice(0, 5);
 
     const summarize = (list) => {
       let pts = 0, gf = 0, ga = 0;
       const results = [];
+
       for (const m of list) {
         let r;
         if (m.venue === "home") {
@@ -260,8 +362,12 @@ function buildFormAndH2H(storedMatches) {
         results.push(r);
         pts += r === "W" ? 3 : r === "D" ? 1 : 0;
       }
+
       return {
-        results, points: pts, goalsFor: gf, goalsAgainst: ga,
+        results,
+        points: pts,
+        goalsFor: gf,
+        goalsAgainst: ga,
         averageGoalsFor: list.length ? Number((gf / list.length).toFixed(3)) : 0,
         averageGoalsAgainst: list.length ? Number((ga / list.length).toFixed(3)) : 0
       };
@@ -283,6 +389,7 @@ function buildFormAndH2H(storedMatches) {
     };
   }
 
+  // H2H: max 5 incontri per coppia
   for (const key of Object.keys(h2h)) {
     h2h[key].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
     h2h[key] = h2h[key].slice(0, 5);
@@ -291,13 +398,19 @@ function buildFormAndH2H(storedMatches) {
   return { form, h2h };
 }
 
+/* =========================================================
+   SALVATAGGIO RISULTATI SU SUPABASE (batch, non bloccante)
+========================================================= */
+
 async function saveResultsToSupabase(storedMatches) {
   const supabase = getSupabase();
   if (!supabase) return { saved: 0, skipped: "no_supabase" };
 
   const rows = [];
+
   for (const match of storedMatches) {
     if (!isFinished(match)) continue;
+
     const matchId = getMatchId(match);
     const homeName = getTeamName(match, "home");
     const awayName = getTeamName(match, "away");
@@ -318,15 +431,25 @@ async function saveResultsToSupabase(storedMatches) {
 
   if (rows.length === 0) return { saved: 0, skipped: "no_rows" };
 
+  // upsert a blocchi di 100 (V5 faceva 200 chiamate singole: lentissimo)
   let saved = 0;
+
   for (let i = 0; i < rows.length; i += 100) {
     const chunk = rows.slice(i, i + 100);
-    const { error } = await supabase.from("results").upsert(chunk, { onConflict: "match_id" });
+    const { error } = await supabase
+      .from("results")
+      .upsert(chunk, { onConflict: "match_id" });
+
     if (error) return { saved, error: error.message };
     saved += chunk.length;
   }
+
   return { saved };
 }
+
+/* =========================================================
+   HANDLER
+========================================================= */
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
@@ -336,12 +459,24 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.BBS_API_KEY;
+
   if (!apiKey) {
-    return res.status(500).json({ ok: false, error: "MISSING_BBS_API_KEY", message: "BBS_API_KEY non configurata." });
+    return res.status(500).json({
+      ok: false,
+      error: "MISSING_BBS_API_KEY",
+      message: "BBS_API_KEY non configurata su Vercel."
+    });
   }
 
   const startedAt = Date.now();
-  const storedUrl = `${BBS_BASE}/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}&limit=${STORED_MATCH_LIMIT}`;
+
+  // =========================================================
+  // 1. TUTTE LE FONTI IN PARALLELO (V5 le faceva sequenziali)
+  // =========================================================
+
+  const storedUrl =
+    `${BBS_BASE}/v1/stored/matches?sport=${SPORT}&league=${LEAGUE}` +
+    `&status=finished&limit=${STORED_MATCH_LIMIT}&sort=desc`; // FIX V5: sort=desc
 
   const [matchesRes, standingsRes, storedRes, understat] = await Promise.allSettled([
     fetchJson(`${BBS_BASE}/v1/matches?sport=${SPORT}&league=${LEAGUE}`, apiKey),
@@ -350,6 +485,7 @@ export default async function handler(req, res) {
     fetchUnderstatStats()
   ]);
 
+  // ---- partite correnti: se fallisce, tutto fallisce
   if (matchesRes.status === "rejected" || !matchesRes.value.ok) {
     const r = matchesRes.status === "rejected" ? null : matchesRes.value;
     return res.status(502).json({
@@ -361,23 +497,70 @@ export default async function handler(req, res) {
   }
 
   const matches = extractMatches(matchesRes.value.data);
-  const standings = standingsRes.status === "fulfilled" && standingsRes.value.ok ? extractStandings(standingsRes.value.data) : [];
 
-  // Prende le partite dall'endpoint stored se ok, altrimenti estrae quelle concluse da matches
-  let storedMatches = storedRes.status === "fulfilled" && storedRes.value.ok 
-    ? extractMatches(storedRes.value.data) 
-    : matches.filter(isFinished);
+  // ---- classifica (opzionale: se fallisce, il modello va avanti senza)
+  const standings =
+    standingsRes.status === "fulfilled" && standingsRes.value.ok
+      ? extractStandings(standingsRes.value.data)
+      : [];
 
-  const storedDates = storedMatches.map(getMatchDate).filter(Boolean).sort();
+  // ---- storico (opzionale)
+  const storedMatches =
+    storedRes.status === "fulfilled" && storedRes.value.ok
+      ? extractMatches(storedRes.value.data)
+      : [];
+
+  const storedDates = storedMatches
+    .map(getMatchDate)
+    .filter(Boolean)
+    .sort();
+
+  // =========================================================
+  // 2. FORMA + H2H
+  // =========================================================
+
   const { form, h2h } = buildFormAndH2H(storedMatches);
+
+  // =========================================================
+  // 3. XG DIRETTO dalle partite BBD (se il piano li include)
+  // =========================================================
+
+  const matchXG = {};
+
+  for (const match of matches) {
+    const id = getMatchId(match);
+    const xg = match?.xG ?? match?.xg ?? null;
+
+    if (!id || !xg || typeof xg !== "object") continue;
+
+    const home = Number(xg.homeXG ?? xg.home_xg ?? xg.home);
+    const away = Number(xg.awayXG ?? xg.away_xg ?? xg.away);
+
+    if (Number.isFinite(home) && Number.isFinite(away) && home >= 0 && away >= 0) {
+      matchXG[id] = { homeXG: home, awayXG: away };
+    }
+  }
+
+  // =========================================================
+  // 4. teamXG (compatibilita' frontend: NUMERI, non oggetti)
+  //    media xG fatta per partita da Understat
+  // =========================================================
 
   const under = understat.status === "fulfilled" ? understat.value : { available: false, stats: {} };
   const teamXG = {};
+
   for (const [key, s] of Object.entries(under.stats || {})) {
-    if (s.xgForPerGame !== null) teamXG[key] = s.xgForPerGame;
+    if (s.xgForPerGame !== null) {
+      teamXG[key] = s.xgForPerGame;
+    }
   }
 
+  // =========================================================
+  // 5. SALVATAGGIO RISULTATI (non blocca la risposta se lento)
+  // =========================================================
+
   let savedResults = { skipped: true };
+
   if (storedMatches.length > 0) {
     try {
       savedResults = await Promise.race([
@@ -389,11 +572,16 @@ export default async function handler(req, res) {
     }
   }
 
+  // =========================================================
+  // 6. RISPOSTA (contratto compatibile con V5 + campi nuovi)
+  // =========================================================
+
   return res.status(200).json({
     ok: true,
     source: "Big Balls Sports Data + Understat",
     league: LEAGUE,
     generatedAt: new Date().toISOString(),
+
     coverage: {
       matches: matches.length,
       storedFinishedMatches: storedMatches.length,
@@ -405,20 +593,25 @@ export default async function handler(req, res) {
       lineups: 0,
       injuries: 0
     },
+
     matches,
     storedMatches,
     standings,
-    teamXG,
-    understat: under.stats || {},
+    teamXG,                    // { nome_normalizzato: numero } <- FIX bug V5
+    understat: under.stats || {},  // dati xG ricchi per il modello
     form,
     h2h,
     lineups: [],
     injuries: [],
+
     diagnostics: {
       matches: { status: matchesRes.value.status, count: matches.length },
-      standings: { status: standingsRes.status === "fulfilled" ? standingsRes.value.status : "FAILED", available: standings.length > 0 },
+      standings: {
+        status: standingsRes.status === "fulfilled" ? standingsRes.value.status : "FAILED",
+        available: standings.length > 0
+      },
       stored: {
-        status: storedRes.status === "fulfilled" ? storedRes.value.status : 200,
+        status: storedRes.status === "fulfilled" ? storedRes.value.status : "FAILED",
         count: storedMatches.length,
         oldestDate: storedDates[0] ?? null,
         newestDate: storedDates[storedDates.length - 1] ?? null
