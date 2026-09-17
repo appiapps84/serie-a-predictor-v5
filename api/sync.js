@@ -144,15 +144,20 @@ function understatSeasonYear() {
 }
 
 function parseUnderstatJsonVar(html, varName) {
-  const re = new RegExp(`var ${varName} = JSON\\.parse\\('(.+?)'\\);`, "s");
+  // Regex per catturare l'assegnazione var varName = JSON.parse('...');
+  const re = new RegExp(`var\\s+${varName}\\s*=\\s*JSON\\.parse\\(['"](.+?)['"]\\);`, "s");
   const m = html.match(re);
   if (!m) return null;
 
   try {
-    // Understat escapa gli apici dentro la stringa JSON
-    const cleaned = m[1].replace(/\\'/g, "'").replace(/\\"/g, '"');
-    return JSON.parse(cleaned);
-  } catch {
+    // Decodifica le sequenze esadecimali (es. \x20) e gli apici usati nel sorgente Understat
+    let decoded = m[1]
+      .replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"');
+    return JSON.parse(decoded);
+  } catch (e) {
+    console.error(`Errore parsing Understat per ${varName}:`, e);
     return null;
   }
 }
